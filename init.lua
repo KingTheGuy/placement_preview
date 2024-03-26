@@ -8,15 +8,24 @@
 
 --TODO: maybe make it so slabs can become walls.. hold shift?
 --hold sneak to place as wall
---TODO: combine slabs?? to full node
+--TODO: combine slabs?? to full node, if the placed node is the same type show a preview in the same location but with the preview being flipped
 
 --TODO: add command to enable and disable the feature
 --TODO: export function to enable and disable feature
 --TODO: add an option to enable and disable none stairs/slab nodes (default=disabled)
 --TODO: options to snap at node or glide [set_pos or move_to]
 
---TODO: figure out how to place angled stairs
---FIXME: the player's hitbox gets in the way
+--TODO: figure out how to do placement for inner/outer corner stairs
+
+--FIXME: need to ignore the player's own hitbox. gets in the way when trying to "preview" placement below the player.
+
+--DONE: on place, is not respecting the preview position!!
+
+--FIXME: look position is not alawys where it should be.. if they intersection is too close it will miss the node git the next.
+
+--NOTE: Why is it by default only work for stairs and slabs? well, because constantly seeing a preview is kinda annoying specially when this games lets you have building items in your hotbar
+
+--FIXME(does not matter too much): need to override MCL's placements(its causing that jumping thing, that i hate)
 
 
 local mod_name = "sense"
@@ -79,47 +88,115 @@ function player_data.getPlayer(name)
 	return player_data.addPlayer(name)
 end
 
+local function stringContains(str, find)
+	str = string.upper(str)
+	find = string.upper(find)
+	local i, _ = string.find(str, find)
+	-- minetest.debug(string.format("what is this: %s %s",find,i))
+	return i
+end
+
 minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack, pointed_thing)
-	if string.match(string.upper(newnode.name), "SLAB") == nil or string.match(string.upper(newnode.name), "STAIRS") == nil then
+	if stringContains(newnode.name, "STAIR") ~= nil or stringContains(newnode.name, "STAIRS") ~= nil then
+		local p_data = player_data.getPlayer(placer:get_player_name())
+		local face = 0
+		if math.deg(p_data.rotation.y) == 0 then
+			face = 0
+		end
+		if math.deg(p_data.rotation.y) == 270 then
+			face = 1
+		end
+		if math.deg(p_data.rotation.y) == 180 then
+			face = 2
+		end
+		if math.deg(p_data.rotation.y) == 90 then
+			face = 3
+		end
+
+		local amount = 90
+
+		local vert_slab = false
+
+		if placer:get_player_control()["sneak"] == true then
+			--if sneaking leave at previous amount.. we are making walls
+			if stringContains(newnode.name, "SLAB") ~= nil then
+				vert_slab = true
+				-- minetest.debug("should be vertical")
+			else
+				if stringContains(newnode.name, "STAIR") ~= nil or stringContains(newnode.name, "STAIRS") ~= nil then
+					if math.deg(p_data.rotation.y) == 270 and math.deg(p_data.rotation.z) == 270 then
+						face = 5
+					end
+					if math.deg(p_data.rotation.y) == 270 and math.deg(p_data.rotation.z) == 90 then
+						face = 9
+					end
+					if math.deg(p_data.rotation.y) == 90 and math.deg(p_data.rotation.z) == 90 then
+						face = 7
+					end
+					if math.deg(p_data.rotation.y) == 90 and math.deg(p_data.rotation.z) == 270 then
+						face = 12
+					end
+					if math.deg(p_data.rotation.y) == 0 and math.deg(p_data.rotation.z) == 90 then
+						face = 12
+					end
+					if math.deg(p_data.rotation.y) == 0 and math.deg(p_data.rotation.z) == 270 then
+						face = 9
+					end
+					if math.deg(p_data.rotation.y) == 180 and math.deg(p_data.rotation.z) == 90 then
+						face = 18
+					end
+					if math.deg(p_data.rotation.y) == 180 and math.deg(p_data.rotation.z) == 270 then
+						face = 7
+					end
+					goto done
+				end
+			end
+		end
+
+		if vert_slab == false then 
+			if stringContains(newnode.name, "SLAB") ~= nil then
+				amount = 180
+			end
+		end
+
+		if math.deg(p_data.rotation.x) == amount and math.deg(p_data.rotation.y) == 0 then
+			if vert_slab == true then
+				face = 8
+			else
+				face = 20
+			end
+		end
+		if math.deg(p_data.rotation.x) == amount and math.deg(p_data.rotation.y) == 90 then
+			if vert_slab == true then
+				face = 15
+			else
+				face = 21
+			end
+		end
+		if math.deg(p_data.rotation.x) == amount and math.deg(p_data.rotation.y) == 180 then
+			if vert_slab == true then
+				face = 6
+			else
+				face = 22
+			end
+		end
+		if math.deg(p_data.rotation.x) == amount and math.deg(p_data.rotation.y) == 270 then
+			if vert_slab == true then
+				-- face = 20
+				face = 17
+			else
+				face = 23
+			end
+		end
+
+
+
+		::done::
+		newnode.param2 = face
+		minetest.swap_node(pos, newnode)
+	else
 		return true
 	end
-
-	local p_data = player_data.getPlayer(placer:get_player_name())
-	local face = 0
-	if math.deg(p_data.rotation.y) == 0 then
-		face = 0
-	end
-	if math.deg(p_data.rotation.y) == 270 then
-		face = 1
-	end
-	if math.deg(p_data.rotation.y) == 180 then
-		face = 2
-	end
-	if math.deg(p_data.rotation.y) == 90 then
-		face = 3
-	end
-
-	local amount = 90
-	if string.match(string.upper(newnode.name), "SLAB") then
-		amount = 180
-	end
-
-
-	if math.deg(p_data.rotation.x) == amount and math.deg(p_data.rotation.y) == 0 then
-		face = 20
-	end
-	if math.deg(p_data.rotation.x) == amount and math.deg(p_data.rotation.y) == 90 then
-		face = 21
-	end
-	if math.deg(p_data.rotation.x) == amount and math.deg(p_data.rotation.y) == 180 then
-		face = 22
-	end
-	if math.deg(p_data.rotation.x) == amount and math.deg(p_data.rotation.y) == 270 then
-		face = 23
-	end
-
-	newnode.param2 = face
-	minetest.swap_node(pos, newnode)
 end)
 
 
@@ -142,13 +219,12 @@ minetest.register_entity(mod_name .. ":" .. "ghost_object", {
 	physical = false,
 	pointable = false,
 	shaded = true,
-  backface_culling = false,
+	backface_culling = false,
 	use_texture_alpha = true,
 
 	-- on_activate = function(self, staticdata, dtime_s)
 	-- 	self.object:remove()
 	-- end,
-
 })
 
 minetest.register_node(mod_name .. ":" .. "frame_node_stairs", {
@@ -166,6 +242,20 @@ minetest.register_node(mod_name .. ":" .. "frame_node_stairs", {
 	paramtype2 = "facedir",
 	place_param2 = 0,
 	groups = { crumbly = 3, oddly_breakable_by_hand = 3 },
+
+	on_rightclick = function(pos, node, clicker, itemstack, pointed_thing)
+		-- local new_node = minetest.registered_nodes[node.name]
+		-- minetest.debug("node name: "..new_node.name)
+		-- new_node.param2 = node.param2 + 1
+		node.param2 = node.param2 + 1
+		if node.param2 >= 24 then
+			node.param2 = 0
+		end
+		minetest.debug("param2 is: " .. node.param2)
+
+		-- local new_pos = {x=pos.x,y=pos.y+1,z=pos.z}
+		minetest.swap_node(pos, node)
+	end,
 })
 
 minetest.register_node(mod_name .. ":" .. "frame_node_slab", {
@@ -183,26 +273,19 @@ minetest.register_node(mod_name .. ":" .. "frame_node_slab", {
 	place_param2 = 0,
 	groups = { crumbly = 3, oddly_breakable_by_hand = 3 },
 
-	-- on_rightclick = function(pos, node, clicker, itemstack, pointed_thing)
-	-- 	-- local new_node = minetest.registered_nodes[node.name]
-	-- 	-- minetest.debug("node name: "..new_node.name)
-	-- 	-- new_node.param2 = node.param2 + 1
-	-- 	node.param2 = node.param2 + 1
-	-- 	if node.param2 >= 24 then
-	-- 		node.param2 = 0
-	-- 	end
-	-- 	minetest.debug("param2 is: " .. node.param2)
+	on_rightclick = function(pos, node, clicker, itemstack, pointed_thing)
+		-- local new_node = minetest.registered_nodes[node.name]
+		-- minetest.debug("node name: "..new_node.name)
+		-- new_node.param2 = node.param2 + 1
+		node.param2 = node.param2 + 1
+		if node.param2 >= 24 then
+			node.param2 = 0
+		end
+		minetest.debug("param2 is: " .. node.param2)
 
-	-- 	-- local new_pos = {x=pos.x,y=pos.y+1,z=pos.z}
-	-- 	minetest.swap_node(pos, node)
-	-- end,
-	-- on_deactivate = function(self, removal) 
-	-- 	for _, p in ipairs(player_data) do
-	-- 		if p.ghost_object == self.object then
-	-- 			p.ghost_object = nil
-	-- 		end
-	-- 	end
-	-- end,
+		-- local new_pos = {x=pos.x,y=pos.y+1,z=pos.z}
+		minetest.swap_node(pos, node)
+	end,
 })
 
 
@@ -252,7 +335,7 @@ local function perform_raycast()
 			-- local player_pos = { x = pos.x, y = pos.y + 1.5, z = pos.z }
 			local player_pos = { x = pos.x, y = pos.y + eye_height, z = pos.z }
 			local new_pos = p:get_look_dir():multiply(RayDistance):add(player_pos)
-			local raycast_result = minetest.raycast(player_pos, new_pos, true, false):next()
+			local raycast_result = minetest.raycast(player_pos, new_pos, false, false):next()
 
 			-- minetest.debug("in hand: " .. hand_item:get_name())
 			-- for i, v in pairs(hand_item:get_meta():to_table()) do
@@ -262,7 +345,7 @@ local function perform_raycast()
 			-- 	end
 			-- end
 
-			if string.match(string.upper(item_name), "STAIR") or string.match(string.upper(item_name), "STAIRS") or string.match(string.upper(item_name), "SLAB") then
+			if stringContains(item_name, "STAIR") ~= nil or stringContains(item_name, "STAIRS") ~= nil or stringContains(item_name, "SLAB") ~= nil then
 			else
 				--if not slabs or stars.. i dont want the preview
 				if p_data.ghost_object ~= nil then
@@ -282,6 +365,7 @@ local function perform_raycast()
 				-- minetest.debug(hit_pos)
 				local point = raycast_result.intersection_point
 				-- minetest.debug("point: " .. vector.to_string(point))
+
 				if hit_pos ~= nil then
 					if p_data.ghost_object == nil then
 						p_data.ghost_object = minetest.add_entity(hit_pos, mod_name .. ":" .. "ghost_object")
@@ -301,23 +385,65 @@ local function perform_raycast()
 					-- 		"#a7d5d900")
 					-- })
 					local new_rot = { x = 0, y = 0, z = 0 }
-					if point.y >= hit_pos.y then
-						if string.match(string.upper(item_name), "STAIR") then
-							new_rot = { x = math.rad(90), y = 0, z = 0 }
+					if p:get_player_control()["sneak"] == false then
+						if point.y >= hit_pos.y then
+							if stringContains(item_name, "STAIR") ~= nil then
+								new_rot = { x = math.rad(90), y = 0, z = 0 }
+							end
+							if stringContains(item_name, "STAIRS") ~= nil then
+								new_rot = { x = math.rad(90), y = 0, z = 0 }
+							end
+							--lets make make it a wall
+							if stringContains(item_name, "SLAB") ~= nil then
+								new_rot = { x = math.rad(180), y = 0, z = 0 }
+							end
 						end
-						if string.match(string.upper(item_name), "STAIRS") then
-							new_rot = { x = math.rad(90), y = 0, z = 0 }
+					else
+						if stringContains(item_name, "STAIR") ~= nil or stringContains(item_name, "STAIRS") ~= nil then
+							-- minetest.debug("these do be the stairs")
+							local facing = math.deg(quantize_direction(p:get_look_horizontal()))
+							-- minetest.debug("facing angle: " .. facing)
+							if facing == 0 then
+								if hit_pos.x >= point.x then
+									new_rot = { x = 0, y = 0, z = math.rad(90) }
+								else
+									new_rot = { x = 0, y = 0, z = math.rad(270) }
+								end
+							end
+							if facing == 180 then
+								if hit_pos.x <= point.x then
+									new_rot = { x = 0, y = 0, z = math.rad(90) }
+								else
+									new_rot = { x = 0, y = 0, z = math.rad(270) }
+								end
+							end
+							if facing == 90 then
+								if hit_pos.z >= point.z then
+									new_rot = { x = 0, y = 0, z = math.rad(90) }
+								else
+									new_rot = { x = 0, y = 0, z = math.rad(270) }
+								end
+							end
+							if facing == 270 then
+								if hit_pos.z <= point.z then
+									new_rot = { x = 0, y = 0, z = math.rad(90) }
+								else
+									new_rot = { x = 0, y = 0, z = math.rad(270) }
+								end
+							end
 						end
-						if string.match(string.upper(item_name), "SLAB") then
-							new_rot = { x = math.rad(180), y = 0, z = 0 }
+						if stringContains(item_name, "SLAB") ~= nil then
+							new_rot = { x = math.rad(90), y = 0, z = 0 }
 						end
 					end
 
 					local p_rot = quantize_direction(p:get_look_horizontal())
-					new_rot = { x = new_rot.x, y = p_rot, z = 0 }
+					new_rot = { x = new_rot.x, y = p_rot + new_rot.y, z = new_rot.z }
 					p_data.rotation = new_rot
 					p_data.ghost_object:set_rotation(new_rot)
-					-- minetest.debug(string.format("placed_node rotation: %s,%s,%s", math.deg(rotation.x), math.deg(rotation.y),math.deg(rotation.z)))
+
+					-- minetest.debug(string.format("placed_node rotation: %s,%s,%s", math.deg(p_data.rotation.x),
+					-- 	math.deg(p_data.rotation.y), math.deg(p_data.rotation.z)))
 
 					-- ghost_node:set_properties({ textures = new_texture[1].."^[brighten"})
 					-- ghost_node:set_properties({ wield_item = hand_item:get_name()})
@@ -373,7 +499,7 @@ minetest.register_on_leaveplayer(function(ObjectRef, timed_out)
 		if p.player_name == ObjectRef:get_player_name() then
 			-- p.ghost_object:remove()
 			-- p.ghost_object= nil
-			table.remove(player_data,i)
+			table.remove(player_data, i)
 		end
 	end
 end)
