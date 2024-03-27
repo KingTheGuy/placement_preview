@@ -1,42 +1,31 @@
+local mod_name = "sense"
+
+--NOTE: Why is it by default only work for stairs and slabs? well, because constantly seeing a preview is kinda annoying specially when this games lets you have building items in your hotbar
 --DONE: the oneplace should only function when its stairs or slabs
 --exmaple: its rotating torches
 --DONE: made the visual possibly animate
 --DONE: remove object when the world end
 --DONE: set for multiplayer
-
---TODO(.): figure out if i can make it slightly transparent
-
---TODO: maybe make it so slabs can become walls.. hold shift?
+--DONE: maybe make it so slabs can become walls.. hold shift?
 --hold sneak to place as wall
---TODO: combine slabs?? to full node, if the placed node is the same type show a preview in the same location but with the preview being flipped
+--DONE: on place, is not respecting the preview position!!
+--DONE: player has unlimited full nodes
+
+--DONE(made it glow instead): figure out if i can make it slightly transparent
+
+--TODO(maybe another time): combine slabs?? to full node, if the placed node is the same type show a preview in the same location but with the preview being flipped
 
 --TODO: add command to enable and disable the feature
 --TODO: export function to enable and disable feature
---TODO: add an option to enable and disable none stairs/slab nodes (default=disabled)
---TODO: options to snap at node or glide [set_pos or move_to]
-
+--TODO: add an option to enable and disable preview of non- stairs/slab nodes (default=disabled)
+--TODO: options to snap to pos node or glide [set_pos or move_to]
 --TODO: figure out how to do placement for inner/outer corner stairs
-
 --FIXME: need to ignore the player's own hitbox. gets in the way when trying to "preview" placement below the player.
-
---DONE: on place, is not respecting the preview position!!
-
 --FIXME: look position is not alawys where it should be.. if they intersection is too close it will miss the node git the next.
 
---NOTE: Why is it by default only work for stairs and slabs? well, because constantly seeing a preview is kinda annoying specially when this games lets you have building items in your hotbar
+local other_nodes = true --false, only preview stairs & slabs. true, all
+local RayDistance = 3.0   -- Adjust as needed
 
---FIXME(does not matter too much): need to override MCL's placements(its causing that jumping thing, that i hate)
-
-
-local mod_name = "sense"
-
-
-local RayDistance = 3.0 -- Adjust as needed
-
--- local rotation = { x = 0, y = 0, z = 0 }
--- local ghost_object = nil
-
---contains player_name ghost_object rotation
 
 ---@type table
 local player_data = {}
@@ -46,21 +35,24 @@ local function ghost_objectAnimation()
 		if p.ghost_object ~= nil then
 			local size = p.ghost_object:get_properties().visual_size
 			local amount = 0
+			local y_amount = 0
 			if p.ghost_object_grow == true then
-				if size.y <= 0.6 then
+				if size.x <= 0.6 then
 					amount = 0.02
+					y_amount = 0.01
 				else
 					p.ghost_object_grow = false
 				end
 			end
 			if p.ghost_object_grow == false then
-				if size.y >= 0.58 then
+				if size.x >= 0.58 then
 					amount = -0.02
+					y_amount = -0.01
 				else
 					p.ghost_object_grow = true
 				end
 			end
-			local new_size = { x = size.x + amount, y = size.y + amount, z = size.z + amount }
+			local new_size = { x = size.x + amount, y = size.y + y_amount, z = size.z + amount }
 			p.ghost_object:set_properties({ visual_size = new_size })
 		end
 	end
@@ -153,7 +145,7 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 			end
 		end
 
-		if vert_slab == false then 
+		if vert_slab == false then
 			if stringContains(newnode.name, "SLAB") ~= nil then
 				amount = 180
 			end
@@ -195,7 +187,7 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 		newnode.param2 = face
 		minetest.swap_node(pos, newnode)
 	else
-		return true
+		return
 	end
 end)
 
@@ -215,10 +207,11 @@ minetest.register_entity(mod_name .. ":" .. "ghost_object", {
 	-- 	"default_cobble.png",
 	-- 	"default_cobble.png",
 	-- },
+	glow = 3,
 	static_save = false,
 	physical = false,
 	pointable = false,
-	shaded = true,
+	shaded = false,
 	backface_culling = false,
 	use_texture_alpha = true,
 
@@ -345,15 +338,24 @@ local function perform_raycast()
 			-- 	end
 			-- end
 
-			if stringContains(item_name, "STAIR") ~= nil or stringContains(item_name, "STAIRS") ~= nil or stringContains(item_name, "SLAB") ~= nil then
-			else
-				--if not slabs or stars.. i dont want the preview
-				if p_data.ghost_object ~= nil then
-					p_data.ghost_object:remove()
-					p_data.ghost_object = nil
-				end
-				goto continue
-			end
+			-- local are_we_previewing_this = true
+			-- if stringContains(item_name, "STAIR") == nil then
+			-- 	are_we_previewing_this = false
+			-- end
+			-- if stringContains(item_name, "STAIRS") == nil then
+			-- 	are_we_previewing_this = false
+			-- end
+			-- if stringContains(item_name, "SLAB") == nil then
+			-- 	are_we_previewing_this = false
+			-- end
+			-- --meaning if it is not stairs/slab do nothing
+			-- if are_we_previewing_this == false then
+			-- 	if p_data.ghost_object ~= nil then
+			-- 		p_data.ghost_object:remove()
+			-- 		p_data.ghost_object = nil
+			-- 	end
+			-- 	goto continue
+			-- end
 
 			if raycast_result then
 				if hand_item:is_empty() == true then
@@ -362,6 +364,7 @@ local function perform_raycast()
 				-- minetest.debug(raycast_result.type)
 				-- local hit_pos = raycast_result.intersection_point --gets the absolute pos [float]
 				local hit_pos = raycast_result.above
+				local under = raycast_result.under
 				-- minetest.debug(hit_pos)
 				local point = raycast_result.intersection_point
 				-- minetest.debug("point: " .. vector.to_string(point))
@@ -378,8 +381,7 @@ local function perform_raycast()
 					-- end
 					-- texture = "default_" .. texture .. ".png^[brighten"
 					-- p_data.ghost_object:move_to(hit_pos)
-					p_data.ghost_object:set_pos(hit_pos)
-					p_data.ghost_object:set_properties({ wield_item = item_name })
+
 					-- p_data.ghost_object:set_properties({
 					-- 	wield_item = minetest.itemstring_with_color(hand_item:get_name(),
 					-- 		"#a7d5d900")
@@ -435,6 +437,60 @@ local function perform_raycast()
 						if stringContains(item_name, "SLAB") ~= nil then
 							new_rot = { x = math.rad(90), y = 0, z = 0 }
 						end
+					end
+
+					-- if p:get_player_control()["sneak"] == false then
+					-- 	if stringContains(item_name, "SLAB") ~= nil then
+					-- 		minetest.debug("this is a slab")
+					-- 		local under_name = minetest.get_node(under).name
+					-- 		minetest.debug("names are: " .. item_name .. " & " .. under_name)
+					-- 		if under_name == item_name then
+					-- 			hit_pos = under
+					-- 		end
+					-- 	end
+					-- end
+
+					--only preview stairs and slabs
+					if other_nodes == false then
+						local not_what_im_looking_for = true
+						if stringContains(item_name, "STAIR") ~= nil then
+							not_what_im_looking_for = false
+						end
+						if stringContains(item_name, "STAIRS") ~= nil then
+							not_what_im_looking_for = false
+						end
+						if stringContains(item_name, "SLAB") ~= nil then
+							not_what_im_looking_for = false
+						end
+						if not_what_im_looking_for == true then
+							if p_data.ghost_object ~= nil then
+								p_data.ghost_object:remove()
+								p_data.ghost_object = nil
+							end
+						goto continue
+						end
+					end
+
+					p_data.ghost_object:set_pos(hit_pos)
+					p_data.ghost_object:set_properties({ wield_item = item_name })
+
+
+					local rotate_this = false
+					if stringContains(item_name, "STAIR") ~= nil then
+						rotate_this = true
+						goto we_preview
+					end
+					if stringContains(item_name, "STAIRS") ~= nil then
+						rotate_this = true
+						goto we_preview
+					end
+					if stringContains(item_name, "SLAB") ~= nil then
+						rotate_this = true
+						goto we_preview
+					end
+					::we_preview::
+					if rotate_this == false then
+						goto continue
 					end
 
 					local p_rot = quantize_direction(p:get_look_horizontal())
