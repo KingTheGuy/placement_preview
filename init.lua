@@ -30,20 +30,19 @@ local mod_name = "placement_preview"
 --TODO: figure out how to do placement for inner/outer corner stairs
 --TODO: add support for doors
 --TODO(done with facedir): instead of checking a nodes names check for facedir and 4dir
---FIXME: mcl daylight-sensor,and carpets looking goofy
 
+--FIXME: mcl daylight-sensor,and carpets looking goofy
 --FIXME: need to ignore the player's own hitbox. gets in the way when trying to "preview" placement below the player.
 --FIXME: look position is not alawys where it should be.. if they intersection is too close it will miss the node git the next.
 
---FIXME(mcl may cause problems): let all nodes be able to do full rotations onless specified.. (reason: mcl dispenser.. etc.)
---FIXME: (mcl lily pads, should show preview on top of water)
---FIXME: mcl lantern not in correct orientation
---FIXME(YES to this): a good amount of node's orientation should be similiar to tree/log types
---example: mcl piston, end rod, grindstone
---FIXME:mcl whatever the player head node is.. it needs to preview to the players rotatoin
-
---DOTHIS: facedir will act like logs or nodes with invs. for orientation difference check if the node includes "stair" in name
+--TODO(maybe?): (mcl lily pads, should show preview on top of water)
+--TODO(yea no thanks): mcl lantern not in correct orientation
+--DONE(mcl may cause problems): let all nodes be able to do full rotations onless specified.. (reason: mcl dispenser.. etc.)
+--DONE(YES to this): a good amount of node's orientation should be similiar to chests/invs types
+--DOTHIS(bro i did it though, trust): facedir will act like logs or nodes with invs. for orientation difference check if the node includes "stair" in name
 -- add arch also be stair support
+--FIXME(ill just get an api going): mcl whatever the player head node is.. it needs to preview to the players rotatoin
+
 
 ----===============----
 
@@ -194,7 +193,7 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 
 		if placer:get_player_control()["sneak"] == true then
 			--if sneaking leave at previous amount.. we are making walls
-			if stringContains(newnode.name, "SLAB") ~= nil or stringContains(newnode.name, "log") ~= nil or stringContains(newnode.name, "tree") ~= nil or stringContains(newnode.name, "trunk") ~= nil then
+			if stringContains(newnode.name, "SLAB") ~= nil then
 				vert_slab = true
 				-- minetest.debug("should be vertical")
 			else
@@ -280,6 +279,11 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 				-- face = 23
 				face = 17
 			end
+		end
+		if math.deg(p_data.rotation.x) == -90 then
+			-- minetest.debug("should be doing a -90")
+			face = 4
+			goto done
 		end
 
 		::done::
@@ -463,7 +467,8 @@ local function perform_raycast()
 							--HORIZONTAL
 							if param2 == 0 or param2 == 1 or param2 == 2 or param2 == 3 then
 								if p:get_player_control()["sneak"] == true then
-									goto override
+									-- goto override
+									goto got_angle
 								end
 								hit_pos = under
 								new_rot = { x = math.rad(180), y = new_rot.y, z = new_rot.z }
@@ -471,7 +476,8 @@ local function perform_raycast()
 							end
 							if param2 == 20 or param2 == 23 or param2 == 22 or param2 == 21 then
 								if p:get_player_control()["sneak"] == true then
-									goto override
+									-- goto override
+									goto got_angle
 								end
 								hit_pos = under
 								new_rot = { x = math.rad(0), y = new_rot.y, z = new_rot.z }
@@ -500,21 +506,98 @@ local function perform_raycast()
 							-- goto got_angle
 						end
 					else
-							p_data.double_slab = nil
+						p_data.double_slab = nil
 					end
 					::skip_this::
 
-					if stringContains(item_name, "chest") ~= nil or stringContains(item_name, "barrel") ~= nil or stringContains(item_name, "crate") ~= nil or stringContains(item_name, "furnace") ~= nil then
-						--lets not get chests all funky looking
-						goto got_angle
-					end
-					if stringContains(item_name, "log") ~= nil or stringContains(item_name, "tree") ~= nil or stringContains(item_name, "trunk") ~= nil then
-						-- new_rot = { x = math.rad(180), y = 0, z = 0 }
-						if under.y == hit_pos.y then
+					if stringContains(this_node.description, "slab") ~= nil then
+						if point.y >= hit_pos.y then
+							new_rot = { x = math.rad(180), y = 0, z = 0 }
+						end
+						if p:get_player_control()["sneak"] == true then
 							new_rot = { x = math.rad(90), y = 0, z = 0 }
 						end
 						goto got_angle
 					end
+					if this_node.paramtype2 == "facedir" then
+						if stringContains(this_node.description, "stair") or stringContains(this_node.description, "stair") then
+							if point.y >= hit_pos.y then
+								new_rot = { x = math.rad(90), y = 0, z = 0 }
+							end
+							if p:get_player_control()["sneak"] == true then
+								local facing = math.deg(quantize_direction(p:get_look_horizontal()))
+								if facing == 0 then
+									if hit_pos.x >= point.x then
+										new_rot = { x = 0, y = 0, z = math.rad(90) }
+									else
+										new_rot = { x = 0, y = 0, z = math.rad(270) }
+									end
+									goto got_angle
+								end
+								if facing == 180 then
+									if hit_pos.x <= point.x then
+										new_rot = { x = 0, y = 0, z = math.rad(90) }
+									else
+										new_rot = { x = 0, y = 0, z = math.rad(270) }
+									end
+									goto got_angle
+								end
+								if facing == 90 then
+									if hit_pos.z >= point.z then
+										new_rot = { x = 0, y = 0, z = math.rad(90) }
+									else
+										new_rot = { x = 0, y = 0, z = math.rad(270) }
+									end
+									goto got_angle
+								end
+								if facing == 270 then
+									if hit_pos.z <= point.z then
+										new_rot = { x = 0, y = 0, z = math.rad(90) }
+									else
+										new_rot = { x = 0, y = 0, z = math.rad(270) }
+									end
+								end
+							end
+							goto got_angle
+						end
+						if stringContains(this_node.description, "observer") ~= nil or stringContains(this_node.description, "dispenser") ~= nil or stringContains(this_node.description, "dropper") ~= nil then
+							--uses the same logic as wallmounted
+							if p:get_player_control()["sneak"] == true then
+									new_rot = { x = 0, y = 0, z = 0 }
+							else
+								if under.x == hit_pos.x and under.z == hit_pos.z then
+									if under.y >= hit_pos.y then
+										new_rot = { x = math.rad(90), y = 0, z = 0 }
+										goto got_angle
+									end
+									new_rot = { x = math.rad(-90), y = 0, z = 0 }
+								else
+								end
+							end
+							goto got_angle
+						end
+						if stringContains(this_node.description, "chest") ~= nil or stringContains(this_node.description, "barrel") ~= nil or stringContains(this_node.description, "crate") ~= nil or stringContains(this_node.description, "furnace") ~= nil then
+							--lets not get chests all funky looking
+							goto got_angle
+						end
+						if stringContains(this_node.description, "lantern") ~= nil then
+							new_rot = { x = math.rad(-90), y = 0, z = 0 }
+							goto got_angle
+						end
+						if under.x == hit_pos.x and under.z == hit_pos.z then
+							if under.y >= hit_pos.y then
+								new_rot = { x = math.rad(180), y = 0, z = 0 }
+							else
+								new_rot = { x = math.rad(0), y = 0, z = 0 }
+							end
+						end
+						if under.y == hit_pos.y then
+							new_rot = { x = math.rad(90), y = 0, z = 0 }
+						end
+						goto got_angle
+						-- end
+					end
+
 
 					if this_node.paramtype2 == "wallmounted" then
 						if under.x == hit_pos.x and under.z == hit_pos.z then
@@ -554,61 +637,27 @@ local function perform_raycast()
 						goto got_angle
 					end
 
-					if p:get_player_control()["sneak"] == false then
-						if point.y >= hit_pos.y then
-							-- minetest.debug("yes this is this!!!")
-							if this_node.paramtype2 == "facedir" or this_node.paramtype2 == "leveled" then
-								--lets make make it a wall
-								new_rot = { x = math.rad(90), y = 0, z = 0 }
-								if stringContains(item_name, "SLAB") ~= nil then
-									new_rot = { x = math.rad(180), y = 0, z = 0 }
-								end
-							end
-						end
-					elseif this_node.paramtype2 == "facedir" then
-						-- if stringContains(item_name, "STAIR") ~= nil or stringContains(item_name, "STAIRS") ~= nil then
-						if stringContains(item_name, "SLAB") ~= nil then
-							new_rot = { x = math.rad(90), y = 0, z = 0 }
-							goto got_angle
-						end
-						if stringContains(item_name, "TRAPDOOR") ~= nil then
-							goto got_angle
-						end
-
-						local facing = math.deg(quantize_direction(p:get_look_horizontal()))
-						-- local facing = quantize_direction(pointed_face)
-						if facing == 0 then
-							if hit_pos.x >= point.x then
-								new_rot = { x = 0, y = 0, z = math.rad(90) }
-							else
-								new_rot = { x = 0, y = 0, z = math.rad(270) }
-							end
-							goto got_angle
-						end
-						if facing == 180 then
-							if hit_pos.x <= point.x then
-								new_rot = { x = 0, y = 0, z = math.rad(90) }
-							else
-								new_rot = { x = 0, y = 0, z = math.rad(270) }
-							end
-							goto got_angle
-						end
-						if facing == 90 then
-							if hit_pos.z >= point.z then
-								new_rot = { x = 0, y = 0, z = math.rad(90) }
-							else
-								new_rot = { x = 0, y = 0, z = math.rad(270) }
-							end
-							goto got_angle
-						end
-						if facing == 270 then
-							if hit_pos.z <= point.z then
-								new_rot = { x = 0, y = 0, z = math.rad(90) }
-							else
-								new_rot = { x = 0, y = 0, z = math.rad(270) }
-							end
-						end
-					end
+					-- if p:get_player_control()["sneak"] == false then
+					-- 	if point.y >= hit_pos.y then
+					-- 		-- minetest.debug("yes this is this!!!")
+					-- 		if this_node.paramtype2 == "facedir" or this_node.paramtype2 == "leveled" then
+					-- 			--lets make make it a wall
+					-- 			new_rot = { x = math.rad(90), y = 0, z = 0 }
+					-- 			if stringContains(item_name, "SLAB") ~= nil then
+					-- 				new_rot = { x = math.rad(180), y = 0, z = 0 }
+					-- 			end
+					-- 		end
+					-- 	end
+					-- elseif this_node.paramtype2 == "facedir" then
+					-- 	-- if stringContains(item_name, "STAIR") ~= nil or stringContains(item_name, "STAIRS") ~= nil then
+					-- 	if stringContains(item_name, "SLAB") ~= nil then
+					-- 		new_rot = { x = math.rad(90), y = 0, z = 0 }
+					-- 		goto got_angle
+					-- 	end
+					-- 	if stringContains(item_name, "TRAPDOOR") ~= nil then
+					-- 		goto got_angle
+					-- 	end
+					-- end
 					::got_angle::
 
 
