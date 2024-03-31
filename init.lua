@@ -26,14 +26,12 @@ local mod_name = "placement_preview"
 --TODO(maybe another time): combine slabs?? to full node, if the placed node is the same type show a preview in the same location but with the preview being flipped
 --TODO: export function to enable and disable feature
 --TODO: add an option to enable and disable preview of non- stairs/slab nodes (default=disabled)
---TODO: options to snap to pos node or glide [set_pos or move_to]
 --TODO: figure out how to do placement for inner/outer corner stairs
 --TODO: add support for doors
 --TODO(done with facedir): instead of checking a nodes names check for facedir and 4dir
 
---FIXME: mcl daylight-sensor,and carpets looking goofy
---FIXME: need to ignore the player's own hitbox. gets in the way when trying to "preview" placement below the player.
---FIXME: look position is not alawys where it should be.. if they intersection is too close it will miss the node git the next.
+--TODO(smooth toggle): options to snap to pos node or glide [set_pos or move_to]
+
 
 --TODO(maybe?): (mcl lily pads, should show preview on top of water)
 --TODO(yea no thanks): mcl lantern not in correct orientation
@@ -41,15 +39,27 @@ local mod_name = "placement_preview"
 --DONE(YES to this): a good amount of node's orientation should be similiar to chests/invs types
 --DOTHIS(bro i did it though, trust): facedir will act like logs or nodes with invs. for orientation difference check if the node includes "stair" in name
 -- add arch also be stair support
+--DONE: upper slab, when holding shift it goes to the wrong orientation, it shows up on the bottom, when it should be at the same level as the top
+--DONE(currently they can only do 90):
+--stair corners need to be able to do a ful 180. add support for stairs to do a ful 180
+--could also manage converting noraml stairs to conrer stairs depending on when is around
+--do something like how im doing with the slabs(holding sneak)
+--ok if looking above a certain amount and also holding shift.. do a 180
+
+--FIXME: mcl daylight-sensor,and carpets looking goofy
+--FIXME: need to ignore the player's own hitbox. gets in the way when trying to "preview" placement below the player.
+--FIXME: look position is not alawys where it should be.. if they intersection is too close it will miss the node git the next.
+
 --FIXME(ill just get an api going): mcl whatever the player head node is.. it needs to preview to the players rotatoin
-
-
+--FIXME: pumpkin placement is not correct
 ----===============----
 
 
-local glow_amount = 4
-local RayDistance = 3.0 -- Adjust as needed -- this should actaully just be the player's reach distance
--- local other_nodes = true --false, only preview stairs & slabs. true, all
+local glow_amount = 3
+local g_smooth = false          --(not great on servers)smooth preview movement, otherwise snaps. players default to the this setting but can individually set it.
+local g_only_stairslike = false --only wanna preview nodes with special placement
+
+local RayDistance = 3.0         --this should actaully just be the player's reach distance
 
 ---@type table
 local player_data = {}
@@ -83,9 +93,26 @@ local function ghost_objectAnimation()
 end
 
 function player_data.addPlayer(name)
-	local data = { player_name = name, ghost_object = nil, ghost_object_grow = true, rotation = { x = 0, y = 0, z = 0 }, disabled = false, node_paramtype2 = nil, double_slab = nil }
-	table.insert(player_data, data)
-	return data
+	local p_data = {
+		player_name = name,
+		ghost_object = nil,
+		ghost_object_grow = true,
+		rotation = { x = 0, y = 0, z = 0 },
+		disabled = false,
+		node_paramtype2 = nil,
+		double_slab = nil,
+		smooth = g_smooth,
+		only_stairslike = g_only_stairslike,
+		removePreview = function(self)
+			if self.ghost_object ~= nil then
+				self.ghost_object:remove()
+				-- minetest.debug("this should be getting removed..")
+				self.ghost_object = nil
+			end
+		end,
+	}
+	table.insert(player_data, p_data)
+	return p_data
 end
 
 ---@alias data table
@@ -100,18 +127,30 @@ function player_data.getPlayer(name)
 	return player_data.addPlayer(name)
 end
 
-local function splitString(full_string, sub)
-	local out = {}
-	local i, _ = string.find(full_string, sub)
-	if i == nil then
-		return nil
+---@param this_string string the string
+---@param split string sub to split at
+local function splitter(this_string, split)
+	local new_word = {}
+	local index = string.find(this_string, split)
+	if index == nil then
+		new_word[1] = this_string
+		new_word[2] = this_string
+		return new_word
 	end
-	for x = 0, i - 2, 1 do
-		out[x] = string.sub(full_string, x, x)
+	local split_index = index
+	local split_start = ""
+	for x = 0, split_index - 1, 1 do
+		split_start = split_start .. string.sub(this_string, x, x)
 	end
-	return table.concat(out)
-end
+	new_word[1] = split_start
 
+	local split_end = ""
+	for x = split_index + #split, #this_string, 1 do
+		split_end = split_end .. string.sub(this_string, x, x)
+	end
+	new_word[2] = split_end
+	return new_word
+end
 
 local function stringContains(str, find)
 	str = string.upper(str)
@@ -120,30 +159,76 @@ local function stringContains(str, find)
 	return i
 end
 
+
+function split(str, delimiter)
+	local result = {}
+	for match in (str .. delimiter):gmatch("(.-)" .. delimiter) do
+		table.insert(result, match)
+	end
+	return result
+end
+
 minetest.register_chatcommand("placement_preview", {
 	params = "[on|off] or [enable|disable] or [true|false]",
 	description = "disable or enable the placement preview",
 	privs = {},
 	func = function(name, param)
 		local player = player_data.getPlayer(name)
-		local _, fields = param:gsub("%S+", "")
-		minetest.debug("this is the command: " .. param .. " " .. #param)
-		if fields > 1 then
-			minetest.chat_send_player(name, minetest.colorize("red", "example: /placement_preview off"))
-			return
+		-- local _, fields = param:gsub("%S+", "")
+		local fields = split(param, " ")
+		-- minetest.debug("this is the command: " .. param .. " " .. #param)
+		if #fields == 1 then
+			if param == "on" or param == "true" or param == "enable" then
+				player.disabled = false
+				minetest.chat_send_player(name, minetest.colorize("cyan", "placement_preview has been enable"))
+			elseif param == "off" or param == "false" or param == "disable" then
+				player.disabled = true
+				minetest.chat_send_player(name, minetest.colorize("cyan", "placement_preview has been disabled"))
+			elseif param == "help" then
+				minetest.chat_send_player(name,
+					minetest.colorize("cyan",
+						table.concat({
+							"list of commands: \n",
+							"\t /placement_preview [true|false] \n",
+							"\t /placement_preview smooth [true|false] \n",
+							"\t /placement_preview only_stairs [true|false] \n",
+							-- "/t /placement_preview ",
+						})
+
+					))
+				-- "try: \n /placement_preview [on|off] or [enable|disable] or [true|false]"))
+			else
+				minetest.chat_send_player(name,
+					minetest.colorize("red", "You may be brain dead.. example: \t /placement_preview help"))
+			end
 		end
-		if param == "on" or param == "true" or param == "enable" then
-			player.disabled = false
-			minetest.chat_send_player(name, minetest.colorize("cyan", "placement_preview has been enable"))
-		elseif param == "off" or param == "false" or param == "disable" then
-			player.disabled = true
-			minetest.chat_send_player(name, minetest.colorize("cyan", "placement_preview has been disabled"))
-		elseif param == "help" then
-			minetest.chat_send_player(name,
-				minetest.colorize("yellow", "try /placement_preview [on|off] or [enable|disable] or [true|false]"))
-		else
-			minetest.chat_send_player(name, minetest.colorize("red", "You may be brain dead.. example: /placement_preview off"))
+		if #fields > 1 then
+			local option = fields[1]
+			local value = fields[2]
+			if option == "smooth" then
+				if value == "true" then
+					player.smooth = true
+				elseif value == "false" then
+					player.smooth = false
+				end
+
+				minetest.chat_send_player(name, minetest.colorize("cyan", string.format("pp smooth is now: " .. value)))
+			elseif option == "only_stairs" then
+				if value == "true" then
+					player.only_stairs = true
+				elseif value == "false" then
+					player.only_stairs = false
+				end
+				minetest.chat_send_player(name,
+					minetest.colorize("cyan", string.format("pp only_stairs os now: " .. value)))
+			else
+				minetest.chat_send_player(name,
+					minetest.colorize("red", "You may be brain dead.. example: \t /placement_preview help"))
+			end
 		end
+		-- 	minetest.chat_send_player(name, minetest.colorize("red", "example: \t /placement_preview off"))
+		-- 	return
+		-- end
 	end,
 
 })
@@ -174,6 +259,74 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 	if p_data.node_paramtype2 == "facedir" then
 		-- if stringContains(newnode.name, "STAIR") ~= nil or stringContains(newnode.name, "STAIRS") ~= nil then
 		local face = 0
+
+		local amount = 90
+
+		local vert_slab = false
+
+		--FIXME: this is only taking care of when it aimed at the top, and override the rest
+		--implement normal
+		if stringContains(newnode.name, "stairs") ~= nil then
+			--support for inner and outer stairs
+			if stringContains(newnode.name, "inner") ~= nil or stringContains(newnode.name, "outer") ~= nil then
+				local rot = p_data.rotation
+				-- minetest.debug(string.format("rotation: %s,%s,%s", math.deg(rot.x), math.deg(rot.y), math.deg(rot.z)))
+
+				if math.deg(p_data.rotation.y) == 360 then
+					-- minetest.debug("one")
+					if math.deg(p_data.rotation.x) == 0 then
+						face = 0
+					else
+						face = 22
+					end
+				end
+				if math.deg(p_data.rotation.y) == 270 then
+					-- minetest.debug("two")
+					if math.deg(p_data.rotation.x) == 0 then
+						face = 1
+					else
+						face = 21
+					end
+				end
+				if math.deg(p_data.rotation.y) == 540 then
+					-- minetest.debug("four")
+					if math.deg(p_data.rotation.x) == 0 then
+						face = 2
+					else
+						face = 20
+					end
+				end
+				if math.deg(p_data.rotation.y) == 450 then
+					-- minetest.debug("five")
+					if math.deg(p_data.rotation.x) == 0 then
+						face = 3
+					else
+						face = 23
+					end
+				end
+				if math.deg(p_data.rotation.y) == 90 then
+					-- minetest.debug("one")
+					if math.deg(p_data.rotation.x) == 0 then
+						face = 3
+					else
+						face = 20
+					end
+				end
+				if math.deg(p_data.rotation.y) == 180 then
+					-- minetest.debug("one")
+					if math.deg(p_data.rotation.x) == 0 then
+						face = 2
+					else
+						face = 20
+					end
+				end
+				-- minetest.debug("YO")
+				goto done
+			end
+		end
+
+
+
 		if math.deg(p_data.rotation.y) == 0 then
 			face = 0
 		end
@@ -187,9 +340,6 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 			face = 3
 		end
 
-		local amount = 90
-
-		local vert_slab = false
 
 		if placer:get_player_control()["sneak"] == true then
 			--if sneaking leave at previous amount.. we are making walls
@@ -230,6 +380,10 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 					face = 7
 					goto done
 				end
+				-- if math.deg(p_data.rotation.z) == 0 and math.deg(p_data.rotation.y) == 180 then
+				-- 	face = 22
+				-- 	goto done
+				-- end
 			end
 		end
 
@@ -351,6 +505,32 @@ minetest.register_node(mod_name .. ":" .. "dev_node_stairs", {
 	end,
 })
 
+minetest.register_node(mod_name .. ":" .. "dev_node_stairs_inner", {
+	description = "dev stairs inner [get orientation]",
+	drawtype = "nodebox",
+	node_box = {
+		type = "fixed",
+		fixed = {
+			{ -0.5, -0.5, -0.5, 0.5, 0.0, 0.5 },
+			{ -0.5, -0.0, -0.0, 0.0, 0.5, 0.5 },
+		}
+
+	},
+	tiles = { "default_cobble.png" },
+	paramtype2 = "facedir",
+	place_param2 = 0,
+	groups = { crumbly = 3, oddly_breakable_by_hand = 3 },
+
+	on_rightclick = function(pos, node, clicker, itemstack, pointed_thing)
+		node.param2 = node.param2 + 1
+		if node.param2 >= 24 then
+			node.param2 = 0
+		end
+		minetest.swap_node(pos, node)
+		minetest.debug(minetest.colorize("cyan", string.format("[%s: %s]", node.name, node.param2)))
+	end,
+})
+
 minetest.register_node(mod_name .. ":" .. "dev_node_slab", {
 	description = "dev slab[get orientation]",
 	drawtype = "nodebox",
@@ -381,6 +561,7 @@ minetest.register_node(mod_name .. ":" .. "dev_node_slab", {
 -- Function to perform raycast and handle the result
 local function perform_raycast()
 	local player = minetest.get_connected_players()
+	-- minetest.debug(string.format("how many? %s", #player_data))
 	if #player > 0 then
 		for _, p in pairs(player) do
 			local p_name = p:get_player_name()
@@ -388,10 +569,7 @@ local function perform_raycast()
 
 			--check if player has feature disabled
 			if p_data.disabled == true then
-				if p_data.ghost_object ~= nil then
-					p_data.ghost_object:remove()
-					p_data.ghost_object = nil
-				end
+				p_data:removePreview()
 				goto continue
 			end
 
@@ -401,10 +579,7 @@ local function perform_raycast()
 			local this_node = minetest.registered_nodes[hand_item:get_name()]
 
 			if hand_item:is_empty() == true then
-				if p_data.ghost_object ~= nil then
-					p_data.ghost_object:remove()
-					p_data.ghost_object = nil
-				end
+				p_data:removePreview()
 			else
 				--check if hand_item is a node
 				if this_node ~= nil then
@@ -413,13 +588,20 @@ local function perform_raycast()
 				-- if this_node == nil or this_node.paramtype2 == "wallmounted" or this_node.paramtype2 == "none" then
 				if this_node == nil then
 					-- minetest.debug("yea this is broken")
-					if p_data.ghost_object ~= nil then
-						p_data.ghost_object:remove()
-						p_data.ghost_object = nil
-					end
+					p_data:removePreview()
 					goto continue
 				end
 			end
+
+			if p_data.only_stairs == true then
+				if stringContains(this_node.description, "stairs") ~= nil or stringContains(this_node.name, "stairs") ~= nil then
+				else
+					p_data:removePreview()
+					goto continue
+				end
+				-- minetest.debug("should only work with stairs")
+			end
+			-- minetest.debug("double this an we is good")
 
 			--save the node's paramtype2 for later use
 
@@ -467,7 +649,6 @@ local function perform_raycast()
 							--HORIZONTAL
 							if param2 == 0 or param2 == 1 or param2 == 2 or param2 == 3 then
 								if p:get_player_control()["sneak"] == true then
-									-- goto override
 									goto got_angle
 								end
 								hit_pos = under
@@ -476,12 +657,16 @@ local function perform_raycast()
 							end
 							if param2 == 20 or param2 == 23 or param2 == 22 or param2 == 21 then
 								if p:get_player_control()["sneak"] == true then
-									-- goto override
+									if under.y == hit_pos.y then
+										new_rot = { x = math.rad(180), y = new_rot.y, z = new_rot.z }
+									end
 									goto got_angle
 								end
+								-- minetest.debug("this right?")
 								hit_pos = under
-								new_rot = { x = math.rad(0), y = new_rot.y, z = new_rot.z }
-								goto skip_this
+								new_rot = { x = 0, y = new_rot.y, z = new_rot.z }
+								goto got_angle
+								-- goto skip_this
 							end
 
 							--VERTICAL
@@ -519,8 +704,57 @@ local function perform_raycast()
 						end
 						goto got_angle
 					end
+
 					if this_node.paramtype2 == "facedir" then
-						if stringContains(this_node.description, "stair") or stringContains(this_node.description, "stair") then
+						if stringContains(this_node.description, "stair") ~= nil or stringContains(this_node.name, "stair") ~= nil then
+							--THIS TAKES CARE OF CORNER-type STAIRS..
+							if stringContains(this_node.description, "inner") ~= nil or stringContains(this_node.description, "outer") ~= nil then
+								--TODO: have this just roate depedning on the x axis..
+								local y = math.rad(0)
+								local elsey = math.rad(270)
+								new_rot = { x = 0, y = 0, z = 0 }
+								if point.y >= hit_pos.y then
+									new_rot = { x = math.rad(180), y = 0, z = 0 }
+									y = math.rad(270)
+									elsey = math.rad(180)
+								end
+								--270 180
+								local facing = math.deg(quantize_direction(p:get_look_horizontal()))
+								if facing == 0 then
+									if hit_pos.x >= point.x then
+										new_rot = { x = new_rot.x, y = y, z = 0 }
+									else
+										new_rot = { x = new_rot.x, y = elsey, z = 0 }
+									end
+									goto got_angle
+								end
+								if facing == 90 then
+									if hit_pos.z >= point.z then
+										new_rot = { x = new_rot.x, y = y, z = 0 }
+									else
+										new_rot = { x = new_rot.x, y = elsey, z = 0 }
+									end
+									goto got_angle
+								end
+								if facing == 180 then
+									if hit_pos.x <= point.x then
+										new_rot = { x = new_rot.x, y = y, z = 0 }
+									else
+										new_rot = { x = new_rot.x, y = elsey, z = 0 }
+									end
+									goto got_angle
+								end
+								if facing == 270 then
+									if hit_pos.z <= point.z then
+										new_rot = { x = new_rot.x, y = y, z = 0 }
+									else
+										new_rot = { x = new_rot.x, y = elsey, z = 0 }
+									end
+								end
+								goto got_angle
+							end
+
+							--*normal stairs
 							if point.y >= hit_pos.y then
 								new_rot = { x = math.rad(90), y = 0, z = 0 }
 							end
@@ -563,7 +797,7 @@ local function perform_raycast()
 						if stringContains(this_node.description, "observer") ~= nil or stringContains(this_node.description, "dispenser") ~= nil or stringContains(this_node.description, "dropper") ~= nil then
 							--uses the same logic as wallmounted
 							if p:get_player_control()["sneak"] == true then
-									new_rot = { x = 0, y = 0, z = 0 }
+								new_rot = { x = 0, y = 0, z = 0 }
 							else
 								if under.x == hit_pos.x and under.z == hit_pos.z then
 									if under.y >= hit_pos.y then
@@ -679,14 +913,27 @@ local function perform_raycast()
 							hit_pos = under
 						end
 					end
-					p_data.ghost_object:set_pos(hit_pos)
+
+					if p_data.stairslike_only == true then
+						if stringContains(this_node.name, "stairs") == nil or stringContains(this_node.name, "stairs") == nil then
+							p_data:removePreview()
+							goto continue
+						end
+					end
+
+					if p_data.smooth == true then
+						p_data.ghost_object:move_to(hit_pos)
+					else
+						p_data.ghost_object:set_pos(hit_pos)
+					end
+
 					if this_node.drawtype == "plantlike" then
-						-- p_data.ghost_object:set_properties({ drawtype = "sprite"})
 						if p_data.ghost_object:get_properties().visual ~= "sprite" then
 							p_data.ghost_object:set_properties({ visual = "sprite" })
 						end
 						if p_data.ghost_object:get_properties().textures ~= this_node.tiles then
 							p_data.ghost_object:set_properties({ textures = this_node.tiles })
+							-- p_data.ghost_object:set_properties({ textures = { this_node.tiles[1] .. "^[opacity:160" } })
 						end
 					else
 						p_data.ghost_object:set_properties({ wield_item = item_name })
@@ -712,10 +959,7 @@ local function perform_raycast()
 					-- end
 				end
 			else
-				if p_data.ghost_object ~= nil then
-					p_data.ghost_object:remove()
-					p_data.ghost_object = nil
-				end
+				p_data:removePreview()
 				-- minetest.debug("Raycast did not hit anything")
 			end
 			::continue::
@@ -723,17 +967,25 @@ local function perform_raycast()
 	end
 end
 
--- Function to continuously perform raycast
-local function continuous_raycast()
-	-- Perform the initial raycast
+local tick = 0.0
+minetest.register_globalstep(function(dtime)
 	perform_raycast()
-	ghost_objectAnimation()
-	-- Schedule the next raycast after a delay (e.g., every 0.1 seconds)
-	minetest.after(0.1, continuous_raycast)
-end
+	tick = tick + 0.5
+	if tick == 1.5 then
+		ghost_objectAnimation()
+		tick = 0
+	end
+	-- minetest.debug(tick)
+	-- minetest.after(4, ghost_objectAnimation)
+end)
 
--- Start the continuous raycasting process
-continuous_raycast()
+-- Function to continuously perform raycast
+-- local function continuous_raycast()
+-- 	-- Perform the initial raycast
+-- 	perform_raycast()
+-- 	ghost_objectAnimation()
+-- end
+-- continuous_raycast()
 
 minetest.register_on_leaveplayer(function(ObjectRef, timed_out)
 	--remove the object when the player leaves
