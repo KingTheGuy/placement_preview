@@ -14,6 +14,8 @@ settings include:
 - double slabs to full block? _maybe_
 
 
+1.0.3 CHANGELOG:
+- fixed doors and workbench placement
 
 1.0.2 CHANGELOG:
 - per player settings (using commands)

@@ -45,6 +45,8 @@ local mod_name = "placement_preview"
 --could also manage converting noraml stairs to conrer stairs depending on when is around
 --do something like how im doing with the slabs(holding sneak)
 --ok if looking above a certain amount and also holding shift.. do a 180
+--DONE: pretty sure pp broke door placement
+--DONE: workbench rotations
 
 --FIXME: mcl daylight-sensor,and carpets looking goofy
 --FIXME: need to ignore the player's own hitbox. gets in the way when trying to "preview" placement below the player.
@@ -52,6 +54,7 @@ local mod_name = "placement_preview"
 
 --FIXME(ill just get an api going): mcl whatever the player head node is.. it needs to preview to the players rotatoin
 --FIXME: pumpkin placement is not correct
+--TODO: actually save the player's settings
 ----===============----
 
 
@@ -810,7 +813,7 @@ local function perform_raycast()
 							end
 							goto got_angle
 						end
-						if stringContains(this_node.description, "chest") ~= nil or stringContains(this_node.description, "barrel") ~= nil or stringContains(this_node.description, "crate") ~= nil or stringContains(this_node.description, "furnace") ~= nil then
+						if stringContains(this_node.description, "chest") ~= nil or stringContains(this_node.description, "barrel") ~= nil or stringContains(this_node.description, "crate") ~= nil or stringContains(this_node.description, "furnace") ~= nil or stringContains(this_node.description, "door") ~= nil or stringContains(this_node.description, "bench") ~= nil then
 							--lets not get chests all funky looking
 							goto got_angle
 						end
