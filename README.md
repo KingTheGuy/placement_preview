@@ -8,21 +8,23 @@ player commands/settings: _/placement_preview_ **help**
 settings include:
 * smooth movement
 * only preview stairs and slabs
-* disable
+* disable/enable preview
 
-**Planned for Next Patch:**
-- double slabs to full block? _maybe_
+_1.0.4 CHANGELOG:_
+- new animation after placing node/block (great for when placing "blocks" quickly)
+- fixed crafting table placement (mcl)
+- actually fixed door placement (80% sure)
+- slightly changed slab placing (still need a bit more work)
 
-
-1.0.3 CHANGELOG:
+_1.0.3 CHANGELOG:_
 - fixed doors and workbench placement
 
-1.0.2 CHANGELOG:
+_1.0.2 CHANGELOG:_
 - per player settings (using commands)
 - support for placement of inner and outer stairs
 - bug fixes
 
-1.0.1 CHANGELOG:
+_1.0.1 CHANGELOG:_
 - double slab preview
 - better node orientation
 - preview on buildable_to
