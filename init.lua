@@ -50,7 +50,8 @@ local mod_name = "placement_preview"
 --DONE: holding shift while points at an upper set of slabs.. it will visually show the right placement, but on place it will place lower
 --DONE(is it fixed?): pumpkin placement is not correct
 --DONE: preview doors
-
+--DONE(default_cobble.png): remove mtg dependency
+--DONE: stairs/slabs only setting causes crash
 
 --FIXME: mcl daylight-sensor,and carpets looking goofy
 --FIXME: need to ignore the player's own hitbox. gets in the way when trying to "preview" placement below the player.
@@ -64,17 +65,17 @@ local mod_name = "placement_preview"
 ----===============----
 
 
-local glow_amount = 3
-local g_smooth = false          --(not great on servers)smooth preview movement, otherwise snaps. players default to the this setting but can individually set it.
-local g_only_stairslike = false --only wanna preview nodes with special placement
+local glow_amount = 4
+local g_smooth = false            --(not great on servers)smooth preview movement, otherwise snaps. players default to the this setting but can individually set it.
+local g_only_stairs_slabs = true --only wanna preview nodes with special placement
 
-local RayDistance = 3.0         --this should actaully just be the player's reach distance
+local RayDistance = 3.0           --this should actaully just be the player's reach distance
 
 ---@type table
-local player_data = {}
+Player_data = {}
 
 local function ghost_objectAnimation()
-	for _, p in ipairs(player_data) do
+	for _, p in ipairs(Player_data) do
 		if p.ghost_object ~= nil then
 			if p.grow == true then
 				local size = { x = 0.1, y = 0.1, z = 0.1 }
@@ -105,7 +106,7 @@ local function ghost_objectAnimation()
 	end
 end
 
-function player_data.addPlayer(name)
+function Player_data.addPlayer(name)
 	local p_data = {
 		player_name = name,
 		ghost_object = nil,
@@ -115,7 +116,7 @@ function player_data.addPlayer(name)
 		node_paramtype2 = nil,
 		double_slab = nil,
 		smooth = g_smooth,
-		only_stairslike = g_only_stairslike,
+		only_stairs_slabs = g_only_stairs_slabs,
 		grow = false,
 		removePreview = function(self)
 			if self.ghost_object ~= nil then
@@ -124,20 +125,20 @@ function player_data.addPlayer(name)
 			end
 		end,
 	}
-	table.insert(player_data, p_data)
+	table.insert(Player_data, p_data)
 	return p_data
 end
 
 ---@alias data table
 
 ---@return data
-function player_data.getPlayer(name)
-	for _, p in ipairs(player_data) do
+function Player_data.getPlayer(name)
+	for _, p in ipairs(Player_data) do
 		if p.player_name == name then
 			return p
 		end
 	end
-	return player_data.addPlayer(name)
+	return Player_data.addPlayer(name)
 end
 
 ---@param this_string string the string
@@ -173,7 +174,7 @@ local function stringContains(str, find)
 end
 
 
-function split(str, delimiter)
+local function split(str, delimiter)
 	local result = {}
 	for match in (str .. delimiter):gmatch("(.-)" .. delimiter) do
 		table.insert(result, match)
@@ -187,7 +188,7 @@ local cmd = {
 	description = "disable or enable the placement preview",
 	privs = {},
 	func = function(name, param)
-		local player = player_data.getPlayer(name)
+		local player = Player_data.getPlayer(name)
 		local fields = split(param, " ")
 		if #fields == 1 then
 			if param == "on" or param == "true" or param == "enable" then
@@ -203,7 +204,7 @@ local cmd = {
 							"list of commands: \n",
 							"\t [true|false] \n",
 							"\t smooth [true|false] \n",
-							"\t only_stairs [true|false] \n",
+							"\t only_stairs_slabs [true|false] \n",
 						})
 
 					))
@@ -220,17 +221,24 @@ local cmd = {
 					player.smooth = true
 				elseif value == "false" then
 					player.smooth = false
+				else
+					minetest.chat_send_player(name,
+						minetest.colorize("red", "You may be brain dead.. example: \t /placement_preview help"))
+					return
 				end
-
 				minetest.chat_send_player(name, minetest.colorize("cyan", string.format("pp smooth is now: " .. value)))
-			elseif option == "only_stairs" then
+			elseif option == "only_stairs_slabs" then
 				if value == "true" then
-					player.only_stairs = true
+					player.only_stairs_slabs = true
 				elseif value == "false" then
-					player.only_stairs = false
+					player.only_stairs_slabs = false
+				else
+					minetest.chat_send_player(name,
+						minetest.colorize("red", "You may be brain dead.. example: \t /placement_preview help"))
+					return
 				end
 				minetest.chat_send_player(name,
-					minetest.colorize("cyan", string.format("pp only_stairs os now: " .. value)))
+					minetest.colorize("cyan", string.format("pp only_stairs_slabs os now: " .. value)))
 			else
 				minetest.chat_send_player(name,
 					minetest.colorize("red", "You may be brain dead.. example: \t /placement_preview help"))
@@ -244,14 +252,24 @@ minetest.register_chatcommand("pp", cmd)
 
 
 minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack, pointed_thing)
-	local p_data = player_data.getPlayer(placer:get_player_name())
+	local p_data = Player_data.getPlayer(placer:get_player_name())
 
 	p_data.grow = true
 
+	-- newnode.param2 = minetest.dir_to_facedir(p_data.rotation, true)
+	-- minetest.swap_node(pos, newnode)
+	-- goto all_done
+
+	if p_data.only_stairs_slabs == true then
+		if stringContains(newnode.name, "stair") ~= nil or stringContains(newnode.name, "slab") ~= nil then
+		else
+			return
+		end
+	end
 	if p_data.node_paramtype2 == nil or p_data.node_paramtype2 == "wallmounted" or p_data.node_paramtype2 == "none" then
 		return
 	end
-	if stringContains(newnode.name,"door") ~= nil then
+	if stringContains(newnode.name, "door") ~= nil then
 		return
 	end
 
@@ -263,7 +281,7 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 
 		local vert_slab = false
 
-		if stringContains(newnode.name, "stairs") ~= nil then
+		if stringContains(newnode.name, "stair") ~= nil then
 			--support for inner and outer stairs
 			if stringContains(newnode.name, "inner") ~= nil or stringContains(newnode.name, "outer") ~= nil then
 				local rot = p_data.rotation
@@ -427,6 +445,7 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 	else
 		return
 	end
+	::all_done::
 end)
 
 local function quantize_direction(yaw)
@@ -470,7 +489,7 @@ minetest.register_node(mod_name .. ":" .. "dev_node_stairs", {
 		}
 
 	},
-	tiles = { "default_cobble.png" },
+	-- tiles = { "default_cobble.png" },
 	paramtype2 = "facedir",
 	place_param2 = 0,
 	groups = { crumbly = 3, oddly_breakable_by_hand = 3 },
@@ -496,7 +515,7 @@ minetest.register_node(mod_name .. ":" .. "dev_node_stairs_inner", {
 		}
 
 	},
-	tiles = { "default_cobble.png" },
+	-- tiles = { "default_cobble.png" },
 	paramtype2 = "facedir",
 	place_param2 = 0,
 	groups = { crumbly = 3, oddly_breakable_by_hand = 3 },
@@ -521,7 +540,7 @@ minetest.register_node(mod_name .. ":" .. "dev_node_slab", {
 		}
 
 	},
-	tiles = { "default_cobble.png" },
+	-- tiles = { "default_cobble.png" },
 	paramtype2 = "facedir",
 	place_param2 = 0,
 	groups = { crumbly = 3, oddly_breakable_by_hand = 3 },
@@ -550,7 +569,7 @@ local function perform_raycast()
 	if #player > 0 then
 		for _, p in pairs(player) do
 			local p_name = p:get_player_name()
-			local p_data = player_data.getPlayer(p_name)
+			local p_data = Player_data.getPlayer(p_name)
 
 			--check if player has feature disabled
 			if p_data.disabled == true then
@@ -575,15 +594,17 @@ local function perform_raycast()
 				end
 			end
 
-			if p_data.only_stairs == true then
+			if hand_item:is_empty() == true then
+				goto continue
+			end
+
+			if p_data.only_stairs_slabs == true then
 				if stringContains(this_node.description, "stairs") ~= nil or stringContains(this_node.name, "stairs") ~= nil then
 				else
 					p_data:removePreview()
 					goto continue
 				end
 			end
-
-			--save the node's paramtype2 for later use
 
 			local eye_height = p:get_properties().eye_height
 			local player_look_dir = p:get_look_dir()
@@ -593,10 +614,6 @@ local function perform_raycast()
 			local raycast_result = minetest.raycast(player_pos, new_pos, false, false):next()
 
 			if raycast_result then
-				if hand_item:is_empty() == true then
-					goto continue
-				end
-
 				local hit_pos = raycast_result.above
 				local under = raycast_result.under
 				local point = raycast_result.intersection_point
@@ -614,7 +631,7 @@ local function perform_raycast()
 
 					-- PREVIEW TWO SLABS INTO ONE
 					if stringContains(item_name, "SLAB") ~= nil then
-						if stringContains(pointed_node.name,item_name) ~= nil then
+						if stringContains(pointed_node.name, item_name) ~= nil then
 							p_data.double_slab = under
 
 							local param2 = pointed_node.param2
@@ -906,51 +923,13 @@ minetest.register_globalstep(function(dtime)
 	end
 end)
 
--- Function to continuously perform raycast
--- local function continuous_raycast()
--- 	-- Perform the initial raycast
--- 	-- perform_raycast()
--- 	-- ghost_objectAnimation()
-
--- 	-- tick = tick + 0.5
--- 	-- if tick == 1 then
--- 		ghost_objectAnimation()
--- 		-- tick = 0
--- 	-- end
--- 	-- perform_raycast()
---   -- Schedule the next raycast after a delay (e.g., every 0.1 seconds)
---   minetest.after(0.05, continuous_raycast)
--- end
--- continuous_raycast()
-
 minetest.register_on_leaveplayer(function(ObjectRef, timed_out)
 	--remove the object when the player leaves
-	for i, p in ipairs(player_data) do
+	for i, p in ipairs(Player_data) do
 		if p.player_name == ObjectRef:get_player_name() then
 			-- p.ghost_object:remove()
 			-- p.ghost_object= nil
-			table.remove(player_data, i)
+			table.remove(Player_data, i)
 		end
 	end
 end)
-
-
--- minetest.register_on_shutdown(function()
--- 	--remove the object at shutdown
--- 	for _, p in ipairs(player_data) do
--- 		p.ghost_object:remove()
--- 		p.ghost_object= nil
--- 	end
--- end)
-
-
---TESTING FORMS, create settings menu with it
--- minetest.register_on_punchnode(function(pos, node, puncher, pointed_thing)
--- 	minetest.show_formspec(puncher:get_player_name(), mod_name .. ":" .. "form", table.concat({
--- 		"formspec_version[7]",
--- 		"size[8,9]",
--- 		"style_type[list;spacing=0,0;size=1,1]",
--- 		"list[current_player;main;0,5;8,4;]",
--- 	}))
-
--- end)
