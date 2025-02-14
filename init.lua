@@ -1,75 +1,11 @@
 local mod_name = "placement_preview"
 
-----LEAVE THIS HERE----
---TODO: setup some type of api for mod devs
---TODO: add ingame cmd for players to edit what orientaion behavior a node should have()
-
---NOTE: Why is it by default only work for stairs and slabs? well, because constantly seeing a preview is kinda annoying specially when this games lets you have building items in your hotbar
---DONE: the oneplace should only function when its stairs or slabs
---exmaple: its rotating torches
---DONE: made the visual possibly animate
---DONE: remove object when the world end
---DONE: set for multiplayer
---DONE: maybe make it so slabs can become walls.. hold shift?
---hold sneak to place as wall
---DONE: on place, is not respecting the preview position!!
---DONE: player has unlimited full nodes
---DONE(made it glow instead): figure out if i can make it slightly transparent
---DONE: add command to enable and disable the feature
---DONE(getting there, logs not being placed right): get correct placement preview depending on paramtyp2
---use the same horizontal rotatoin that ive been using.. if if point under Y level [x,z] are equal then place facing up/down..
---otherwise point to sides
---can use that same logic for wallmounted
---DONE: upside down stair are not the right texture orientation
---DONE: ignore nodes with buildable tag
---DONE: add support for type wallmounted
---TODO(maybe another time): combine slabs?? to full node, if the placed node is the same type show a preview in the same location but with the preview being flipped
---TODO: export function to enable and disable feature
---TODO: add an option to enable and disable preview of non- stairs/slab nodes (default=disabled)
---TODO: figure out how to do placement for inner/outer corner stairs
---TODO: add support for doors
---TODO(done with facedir): instead of checking a nodes names check for facedir and 4dir
-
---TODO(smooth toggle): options to snap to pos node or glide [set_pos or move_to]
-
---TODO(maybe?): (mcl lily pads, should show preview on top of water)
---TODO(yea no thanks): mcl lantern not in correct orientation
---DONE(mcl may cause problems): let all nodes be able to do full rotations onless specified.. (reason: mcl dispenser.. etc.)
---DONE(YES to this): a good amount of node's orientation should be similiar to chests/invs types
---DOTHIS(bro i did it though, trust): facedir will act like logs or nodes with invs. for orientation difference check if the node includes "stair" in name
--- add arch also be stair support
---DONE: upper slab, when holding shift it goes to the wrong orientation, it shows up on the bottom, when it should be at the same level as the top
---DONE(currently they can only do 90):
---stair corners need to be able to do a ful 180. add support for stairs to do a ful 180
---could also manage converting noraml stairs to conrer stairs depending on when is around
---do something like how im doing with the slabs(holding sneak)
---ok if looking above a certain amount and also holding shift.. do a 180
---DONE: pretty sure pp broke door placement
---DONE: workbench rotations
---DONE(making slabs that much better to place): slabs should only show the full preview only if pointed at the face within the node's position
---DONE: holding shift while points at an upper set of slabs.. it will visually show the right placement, but on place it will place lower
---DONE(is it fixed?): pumpkin placement is not correct
---DONE: preview doors
---DONE(default_cobble.png): remove mtg dependency
---DONE: stairs/slabs only setting causes crash
-
---FIXME: mcl daylight-sensor,and carpets looking goofy
---FIXME: need to ignore the player's own hitbox. gets in the way when trying to "preview" placement below the player.
---FIXME: look position is not alawys where it should be.. if they intersection is too close it will miss the node git the next.
---FIXME(ill just get an api going): mcl whatever the player head node is.. it needs to preview to the players rotatoin
---FIXME: running /clearobjects causes crash
---TODO: actually save the player's settings
---TODO: maybe holding shift should "lock" the rotation to noraml
---TODO: maybe switch placment orientaion to depend on what block face they its being placed on
-
-----===============----
-
-
 local glow_amount = 4
-local g_smooth = false            --(not great on servers)smooth preview movement, otherwise snaps. players default to the this setting but can individually set it.
-local g_only_stairs_slabs = true --only wanna preview nodes with special placement
+local g_smooth = false           --(not great on servers)smooth preview movement, otherwise snaps. players default to the this setting but can individually set it.
+local g_only_stairs_slabs = false --only wanna preview nodes with special placement
 
-local RayDistance = 3.0           --this should actaully just be the player's reach distance
+---@type number
+local reach_distance = 3.0          --this should actaully just be the player's reach distance
 
 ---@type table
 Player_data = {}
@@ -269,9 +205,9 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 	if p_data.node_paramtype2 == nil or p_data.node_paramtype2 == "wallmounted" or p_data.node_paramtype2 == "none" then
 		return
 	end
-	if stringContains(newnode.name, "door") ~= nil then
-		return
-	end
+	-- if stringContains(newnode.name, "door") ~= nil then
+	-- 	return
+	-- end
 
 	if p_data.node_paramtype2 == "facedir" then
 		-- if stringContains(newnode.name, "STAIR") ~= nil or stringContains(newnode.name, "STAIRS") ~= nil then
@@ -610,7 +546,20 @@ local function perform_raycast()
 			local player_look_dir = p:get_look_dir()
 			local pos = p:get_pos():add(player_look_dir)
 			local player_pos = { x = pos.x, y = pos.y + eye_height, z = pos.z }
-			local new_pos = p:get_look_dir():multiply(RayDistance):add(player_pos)
+			local player_reach_distance = reach_distance
+			if core.get_modpath("mcl_gamemode") and mcl_gamemode then
+				local player_gamemode = mcl_gamemode.get_gamemode(p)
+				-- core.log("gamemode: "..player_gamemode)
+				if core.get_modpath("mcl_meshhand") and mcl_meshhand then
+					if player_gamemode == "creative" then
+						player_reach_distance = tonumber(minetest.settings:get("mcl_hand_range_creative")) or 9.5
+					else
+						player_reach_distance = tonumber(minetest.settings:get("mcl_hand_range")) or 3.5
+					end
+
+				end
+			end
+			local new_pos = p:get_look_dir():multiply(player_reach_distance):add(player_pos)
 			local raycast_result = minetest.raycast(player_pos, new_pos, false, false):next()
 
 			if raycast_result then
@@ -802,10 +751,10 @@ local function perform_raycast()
 							end
 							goto got_angle
 						end
-						if stringContains(this_node.description, "table") ~= nil or stringContains(this_node.description, "chest") ~= nil or stringContains(this_node.description, "barrel") ~= nil or stringContains(this_node.description, "crate") ~= nil or stringContains(this_node.description, "furnace") ~= nil or stringContains(this_node.description, "door") ~= nil or stringContains(this_node.description, "bench") ~= nil then
-							--lets not get chests all funky looking
-							goto got_angle
-						end
+						-- if stringContains(this_node.description, "table") ~= nil or stringContains(this_node.description, "chest") ~= nil or stringContains(this_node.description, "barrel") ~= nil or stringContains(this_node.description, "crate") ~= nil or stringContains(this_node.description, "furnace") ~= nil or stringContains(this_node.description, "door") ~= nil or stringContains(this_node.description, "bench") ~= nil then
+						-- 	--lets not get chests all funky looking
+						-- 	goto got_angle
+						-- end
 						if stringContains(this_node.description, "lantern") ~= nil then
 							new_rot = { x = math.rad(-90), y = 0, z = 0 }
 							goto got_angle
@@ -932,4 +881,9 @@ minetest.register_on_leaveplayer(function(ObjectRef, timed_out)
 			table.remove(Player_data, i)
 		end
 	end
+end)
+
+
+core.register_on_punchnode(function(pos, node, puncher, pointed_thing)
+	core.log("what is this"..dump(node))
 end)
