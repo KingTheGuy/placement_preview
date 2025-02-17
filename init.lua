@@ -1,11 +1,14 @@
+dofile(core.get_modpath("placement_preview") .. "/utils.lua")
 local mod_name = "placement_preview"
 
+local dev_mode = false;
+
 local glow_amount = 4
-local g_smooth = false           --(not great on servers)smooth preview movement, otherwise snaps. players default to the this setting but can individually set it.
+local g_smooth = false            --(not great on servers)smooth preview movement, otherwise snaps. players default to the this setting but can individually set it.
 local g_only_stairs_slabs = false --only wanna preview nodes with special placement
 
 ---@type number
-local reach_distance = 3.0          --this should actaully just be the player's reach distance
+local reach_distance = 3.0 --this should actaully just be the player's reach distance
 
 ---@type table
 Player_data = {}
@@ -50,6 +53,7 @@ function Player_data.addPlayer(name)
 		rotation = { x = 0, y = 0, z = 0 },
 		disabled = false,
 		node_paramtype2 = nil,
+		connected = false,
 		double_slab = nil,
 		smooth = g_smooth,
 		only_stairs_slabs = g_only_stairs_slabs,
@@ -77,47 +81,6 @@ function Player_data.getPlayer(name)
 	return Player_data.addPlayer(name)
 end
 
----@param this_string string the string
----@param split string sub to split at
-local function splitter(this_string, split)
-	local new_word = {}
-	local index = string.find(this_string, split)
-	if index == nil then
-		new_word[1] = this_string
-		new_word[2] = this_string
-		return new_word
-	end
-	local split_index = index
-	local split_start = ""
-	for x = 0, split_index - 1, 1 do
-		split_start = split_start .. string.sub(this_string, x, x)
-	end
-	new_word[1] = split_start
-
-	local split_end = ""
-	for x = split_index + #split, #this_string, 1 do
-		split_end = split_end .. string.sub(this_string, x, x)
-	end
-	new_word[2] = split_end
-	return new_word
-end
-
-local function stringContains(str, find)
-	str = string.upper(str)
-	find = string.upper(find)
-	local i, _ = string.find(str, find)
-	return i
-end
-
-
-local function split(str, delimiter)
-	local result = {}
-	for match in (str .. delimiter):gmatch("(.-)" .. delimiter) do
-		table.insert(result, match)
-	end
-	return result
-end
-
 local cmd = {
 	params = "help",
 	-- params = "[on|off] or [enable|disable] or [true|false]",
@@ -125,7 +88,7 @@ local cmd = {
 	privs = {},
 	func = function(name, param)
 		local player = Player_data.getPlayer(name)
-		local fields = split(param, " ")
+		local fields = Utils.Split(param, " ")
 		if #fields == 1 then
 			if param == "on" or param == "true" or param == "enable" then
 				player.disabled = false
@@ -189,6 +152,7 @@ minetest.register_chatcommand("pp", cmd)
 
 minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack, pointed_thing)
 	local p_data = Player_data.getPlayer(placer:get_player_name())
+	-- core.log("face.."..core.dir_to_facedir(placer:get_look_dir()))
 
 	p_data.grow = true
 
@@ -196,30 +160,45 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 	-- minetest.swap_node(pos, newnode)
 	-- goto all_done
 
+	--check if only stairs option
 	if p_data.only_stairs_slabs == true then
-		if stringContains(newnode.name, "stair") ~= nil or stringContains(newnode.name, "slab") ~= nil then
+		if Utils.StringContains(newnode.name, "stair") ~= nil or Utils.StringContains(newnode.name, "slab") ~= nil then
 		else
 			return
 		end
 	end
+	--check if wallmounted or nil
 	if p_data.node_paramtype2 == nil or p_data.node_paramtype2 == "wallmounted" or p_data.node_paramtype2 == "none" then
 		return
 	end
-	-- if stringContains(newnode.name, "door") ~= nil then
-	-- 	return
-	-- end
+	--Doors kinda get placed werid otherwise
+	if Utils.StringContains(newnode.name, "door") ~= nil then
+		return
+	end
 
 	if p_data.node_paramtype2 == "facedir" then
-		-- if stringContains(newnode.name, "STAIR") ~= nil or stringContains(newnode.name, "STAIRS") ~= nil then
+		-- if Utils.StringContains(newnode.name, "STAIR") ~= nil or Utils.StringContains(newnode.name, "STAIRS") ~= nil then
 		local face = 0
 
 		local amount = 90
 
 		local vert_slab = false
 
-		if stringContains(newnode.name, "stair") ~= nil then
-			--support for inner and outer stairs
-			if stringContains(newnode.name, "inner") ~= nil or stringContains(newnode.name, "outer") ~= nil then
+		--TODO: somewhere i then need to place the correct node following the new conrner code
+		if Utils.StringContains(newnode.name, "stair") ~= nil then
+			--(ONLY)support for inner and outer stairs
+			if Utils.StringContains(newnode.name, "outer") ~= nil or Utils.StringContains(newnode.name, "inner") ~= nil
+					-- or
+					-- p_data.connected == true
+			then
+				if p_data.connected == true then
+					core.log("we are connecting connected?")
+					local is_connected = core.registered_nodes[p_data.ghost_object:get_properties().wield_item]
+					if Utils.StringContains(is_connected.name, "outer") ~= nil or Utils.StringContains(is_connected.name, "inner") ~= nil then
+						newnode = is_connected
+					end
+				end
+				-- 	core.log("this should be switched to be an outer/inner node")
 				local rot = p_data.rotation
 				-- minetest.debug(string.format("rotation: %s,%s,%s", math.deg(rot.x), math.deg(rot.y), math.deg(rot.z)))
 				if math.deg(p_data.rotation.y) == 360 then
@@ -286,10 +265,10 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 
 		if placer:get_player_control()["sneak"] == true then
 			--if sneaking leave at previous amount.. we are making walls
-			if stringContains(newnode.name, "SLAB") ~= nil then
+			if Utils.StringContains(newnode.name, "SLAB") ~= nil then
 				vert_slab = true
 			else
-				-- if stringContains(newnode.name, "STAIR") ~= nil or stringContains(newnode.name, "STAIRS") ~= nil then
+				-- if Utils.StringContains(newnode.name, "STAIR") ~= nil or Utils.StringContains(newnode.name, "STAIRS") ~= nil then
 				if math.deg(p_data.rotation.y) == 270 and math.deg(p_data.rotation.z) == 270 then
 					face = 5
 					goto done
@@ -326,7 +305,7 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 		end
 
 		if vert_slab == false then
-			if stringContains(newnode.name, "SLAB") ~= nil then
+			if Utils.StringContains(newnode.name, "SLAB") ~= nil then
 				amount = 180
 			end
 		end
@@ -334,7 +313,7 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 		if math.deg(p_data.rotation.x) == amount and math.deg(p_data.rotation.y) == 0 then
 			if vert_slab == true then
 				face = 8
-			elseif stringContains(newnode.name, "SLAB") ~= nil then
+			elseif Utils.StringContains(newnode.name, "SLAB") ~= nil then
 				face = 20
 			else
 				face = 8
@@ -344,7 +323,7 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 		if math.deg(p_data.rotation.x) == amount and math.deg(p_data.rotation.y) == 90 then
 			if vert_slab == true then
 				face = 15
-			elseif stringContains(newnode.name, "SLAB") ~= nil then
+			elseif Utils.StringContains(newnode.name, "SLAB") ~= nil then
 				face = 21
 			else
 				face = 15
@@ -354,7 +333,7 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 		if math.deg(p_data.rotation.x) == amount and math.deg(p_data.rotation.y) == 180 then
 			if vert_slab == true then
 				face = 6
-			elseif stringContains(newnode.name, "SLAB") ~= nil then
+			elseif Utils.StringContains(newnode.name, "SLAB") ~= nil then
 				face = 22
 			else
 				face = 6
@@ -364,7 +343,7 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 		if math.deg(p_data.rotation.x) == amount and math.deg(p_data.rotation.y) == 270 then
 			if vert_slab == true then
 				face = 17
-			elseif stringContains(newnode.name, "SLAB") ~= nil then
+			elseif Utils.StringContains(newnode.name, "SLAB") ~= nil then
 				face = 23
 			else
 				face = 17
@@ -376,8 +355,12 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 		end
 
 		::done::
+		--FIXME: still have no idea why this is not fully setting correclty
+		-- is it to do with how the node is placing "its-self"
+		-- do "inner/outer" from others reset themselves(??)
+		core.log("new face should be set.. along with swaping the node")
 		newnode.param2 = face
-		minetest.swap_node(pos, newnode)
+		core.set_node(pos, newnode)
 	else
 		return
 	end
@@ -414,82 +397,86 @@ minetest.register_entity(mod_name .. ":" .. "ghost_object", {
 	use_texture_alpha = true,
 })
 
-minetest.register_node(mod_name .. ":" .. "dev_node_stairs", {
-	description = "dev stairs[get orientation]",
-	drawtype = "nodebox",
-	node_box = {
-		type = "fixed",
-		fixed = {
-			{ -0.5, -0.5, -0.5, 0.5, 0.0, 0.5 },
-			{ -0.5, -0.0, -0.0, 0.5, 0.5, 0.5 },
-		}
+if dev_mode then
+	minetest.register_node(mod_name .. ":" .. "dev_node_stairs", {
+		description = "dev stairs[get orientation]",
+		drawtype = "nodebox",
+		node_box = {
+			type = "fixed",
+			fixed = {
+				{ -0.5, -0.5, -0.5, 0.5, 0.0, 0.5 },
+				{ -0.5, -0.0, -0.0, 0.5, 0.5, 0.5 },
+			}
 
-	},
-	-- tiles = { "default_cobble.png" },
-	paramtype2 = "facedir",
-	place_param2 = 0,
-	groups = { crumbly = 3, oddly_breakable_by_hand = 3 },
+		},
+		-- tiles = { "default_cobble.png" },
+		paramtype2 = "facedir",
+		place_param2 = 0,
+		groups = { crumbly = 3, oddly_breakable_by_hand = 3 },
 
-	on_rightclick = function(pos, node, clicker, itemstack, pointed_thing)
-		node.param2 = node.param2 + 1
-		if node.param2 >= 24 then
-			node.param2 = 0
-		end
-		minetest.swap_node(pos, node)
-		minetest.debug(minetest.colorize("cyan", string.format("[%s: %s]", node.name, node.param2)))
-	end,
-})
+		on_rightclick = function(pos, node, clicker, itemstack, pointed_thing)
+			node.param2 = node.param2 + 1
+			if node.param2 >= 24 then
+				node.param2 = 0
+			end
+			minetest.swap_node(pos, node)
+			minetest.debug(minetest.colorize("cyan", string.format("[%s: %s]", node.name, node.param2)))
+		end,
+	})
 
-minetest.register_node(mod_name .. ":" .. "dev_node_stairs_inner", {
-	description = "dev stairs inner [get orientation]",
-	drawtype = "nodebox",
-	node_box = {
-		type = "fixed",
-		fixed = {
-			{ -0.5, -0.5, -0.5, 0.5, 0.0, 0.5 },
-			{ -0.5, -0.0, -0.0, 0.0, 0.5, 0.5 },
-		}
+	minetest.register_node(mod_name .. ":" .. "dev_node_stairs_inner", {
+		description = "dev stairs inner [get orientation]",
+		drawtype = "nodebox",
+		node_box = {
+			type = "fixed",
+			fixed = {
+				{ -0.5, -0.5, -0.5, 0.5, 0.0, 0.5 },
+				{ -0.5, -0.0, -0.0, 0.0, 0.5, 0.5 },
+			}
 
-	},
-	-- tiles = { "default_cobble.png" },
-	paramtype2 = "facedir",
-	place_param2 = 0,
-	groups = { crumbly = 3, oddly_breakable_by_hand = 3 },
+		},
+		-- tiles = { "default_cobble.png" },
+		paramtype2 = "facedir",
+		place_param2 = 0,
+		groups = { crumbly = 3, oddly_breakable_by_hand = 3 },
 
-	on_rightclick = function(pos, node, clicker, itemstack, pointed_thing)
-		node.param2 = node.param2 + 1
-		if node.param2 >= 24 then
-			node.param2 = 0
-		end
-		minetest.swap_node(pos, node)
-		-- minetest.debug(minetest.colorize("cyan", string.format("[%s: %s]", node.name, node.param2)))
-	end,
-})
+		on_rightclick = function(pos, node, clicker, itemstack, pointed_thing)
+			node.param2 = node.param2 + 1
+			if node.param2 >= 24 then
+				node.param2 = 0
+			end
+			minetest.swap_node(pos, node)
+			-- minetest.debug(minetest.colorize("cyan", string.format("[%s: %s]", node.name, node.param2)))
+		end,
+	})
 
-minetest.register_node(mod_name .. ":" .. "dev_node_slab", {
-	description = "dev slab[get orientation]",
-	drawtype = "nodebox",
-	node_box = {
-		type = "fixed",
-		fixed = {
-			{ -0.5, -0.5, -0.5, 0.5, 0.0, 0.5 },
-		}
+	minetest.register_node(mod_name .. ":" .. "dev_node_slab", {
+		description = "dev slab[get orientation]",
+		drawtype = "nodebox",
+		node_box = {
+			type = "fixed",
+			fixed = {
+				{ -0.5, -0.5, -0.5, 0.5, 0.0, 0.5 },
+			}
 
-	},
-	-- tiles = { "default_cobble.png" },
-	paramtype2 = "facedir",
-	place_param2 = 0,
-	groups = { crumbly = 3, oddly_breakable_by_hand = 3 },
+		},
+		-- tiles = { "default_cobble.png" },
+		paramtype2 = "facedir",
+		place_param2 = 0,
+		groups = { crumbly = 3, oddly_breakable_by_hand = 3 },
 
-	on_rightclick = function(pos, node, clicker, itemstack, pointed_thing)
-		node.param2 = node.param2 + 1
-		if node.param2 >= 24 then
-			node.param2 = 0
-		end
-		minetest.swap_node(pos, node)
-		-- minetest.debug(minetest.colorize("cyan", string.format("[%s: %s]", node.name, node.param2)))
-	end,
-})
+		on_rightclick = function(pos, node, clicker, itemstack, pointed_thing)
+			node.param2 = node.param2 + 1
+			if node.param2 >= 24 then
+				node.param2 = 0
+			end
+			minetest.swap_node(pos, node)
+			-- minetest.debug(minetest.colorize("cyan", string.format("[%s: %s]", node.name, node.param2)))
+		end,
+	})
+end
+
+
 
 
 function Distance(x1, y1, z1, x2, y2, z2)
@@ -497,6 +484,61 @@ function Distance(x1, y1, z1, x2, y2, z2)
 	local dy = y2 - y1
 	local dz = z2 - z1
 	return math.sqrt(dx * dx + dy * dy + dz * dz)
+end
+
+---@class vector table
+---@param ghost_pos vector
+---@return string|nil
+-- get the current pos..
+-- if there are stairs around it that it could connect to
+-- connect
+-- just need to check horizontally?
+local function surroudingNodes(ghost_pos, pointed_thing)
+	-- core.log("pointing at.." .. pointed_thing.name)
+	-- core.log("this a point? "..dump(ghost_pos))
+	--TODO: need to take into account what the player is poining at...
+	-- if pointing at a node that it can connect to then show as connected
+	-- if not pointing at stair node it should be an "inner"
+	local is_connected = false
+	local is_outer = false
+	if Utils.StringContains(pointed_thing.name, "stair") ~= nil then
+		-- core.log("we are looking at a stair")
+		is_outer = true
+	end
+
+	local to_check = {
+		{ { x = 1, y = 0, z = 0 },  { x = 0, y = 0, z = 1 } },
+		{ { x = -1, y = 0, z = 0 }, { x = 0, y = 0, z = 1 } },
+		{ { x = 1, y = 0, z = 0 },  { x = 0, y = 0, z = -1 } },
+
+		{ { x = -1, y = 0, z = 0 }, { x = 0, y = 0, z = -1 } },
+	}
+
+	for i, check in ipairs(to_check) do
+		local first = core.get_node(ghost_pos:add(check[1]))
+		local second = core.get_node(ghost_pos:add(check[2]))
+		if Utils.StringContains(first.name, "stair") ~= nil then
+			if Utils.StringContains(second.name, "stair") ~= nil then
+				is_connected = true
+			end
+		end
+	end
+
+
+	-- core.log("other: "..dump(other))
+	-- local other_node = core.registered_nodes[other:get_name()]
+	-- local another_node= core.registered_nodes[other:get_name()]
+	-- core.log("another: "..dump(another))
+
+
+	if is_connected == true then
+		if is_outer == true then
+			return "outer"
+		else
+			return "inner"
+		end
+	end
+	return nil
 end
 
 -- Function to perform raycast and handle the result
@@ -516,7 +558,12 @@ local function perform_raycast()
 			local hand_item = p:get_wielded_item()
 			local item_name = hand_item:get_name()
 
-			local this_node = minetest.registered_nodes[hand_item:get_name()]
+			local this_node = minetest.registered_nodes[item_name]
+
+			if this_node == nil then
+				p_data:removePreview()
+				return
+			end
 
 			if hand_item:is_empty() == true then
 				p_data:removePreview()
@@ -535,7 +582,7 @@ local function perform_raycast()
 			end
 
 			if p_data.only_stairs_slabs == true then
-				if stringContains(this_node.description, "stairs") ~= nil or stringContains(this_node.name, "stairs") ~= nil then
+				if Utils.StringContains(this_node.description, "stairs") ~= nil or Utils.StringContains(this_node.name, "stairs") ~= nil then
 				else
 					p_data:removePreview()
 					goto continue
@@ -556,7 +603,6 @@ local function perform_raycast()
 					else
 						player_reach_distance = tonumber(minetest.settings:get("mcl_hand_range")) or 3.5
 					end
-
 				end
 			end
 			local new_pos = p:get_look_dir():multiply(player_reach_distance):add(player_pos)
@@ -575,12 +621,48 @@ local function perform_raycast()
 					end
 					p_data.ghost_object:set_properties({ visual = "item" })
 
-
 					local new_rot = { x = 0, y = 0, z = 0 }
 
+					--lets just place the stair normally without connecting
+					local is_connected = nil
+					if p:get_player_control()["sneak"] == false then
+						is_connected = surroudingNodes(hit_pos, pointed_node)
+						--FIXME: this should also prevent it from doiing the alt placement
+					end
+					if is_connected ~= nil then
+						--FIXME: i guess the issue is that kinda loops over it's self
+						-- core.log("welp in that case we should display a inner/outter stair")
+						local this_is_already_corner = false
+						if Utils.StringContains(this_node.name, is_connected) ~= nil then
+							this_is_already_corner = true
+						end
+						if Utils.StringContains(this_node.name, is_connected) ~= nil then
+							this_is_already_corner = true
+						end
+						if this_is_already_corner == false then
+							-- core.log("yes this is not connecting")
+							local s_node = minetest.registered_nodes[item_name .. "_" .. is_connected]
+							if s_node == nil then
+								local split_word = Utils.Split(item_name, "_")
+								local combined_word = split_word[1] .. "_" .. is_connected .. "_" .. split_word[2]
+								-- core.log("what do we have..", combined_word)
+								s_node = minetest.registered_nodes[combined_word]
+								if s_node ~= nil then
+									item_name = combined_word
+								end
+							else
+								item_name = item_name .. "_" .. is_connected
+							end
+							if s_node ~= nil then
+								this_node = s_node
+							end
+						end
+						p_data.connected = true
+					end
+
 					-- PREVIEW TWO SLABS INTO ONE
-					if stringContains(item_name, "SLAB") ~= nil then
-						if stringContains(pointed_node.name, item_name) ~= nil then
+					if Utils.StringContains(item_name, "SLAB") ~= nil then
+						if Utils.StringContains(pointed_node.name, item_name) ~= nil then
 							p_data.double_slab = under
 
 							local param2 = pointed_node.param2
@@ -635,7 +717,7 @@ local function perform_raycast()
 					end
 					::skip_this::
 
-					if stringContains(this_node.description, "slab") ~= nil then
+					if Utils.StringContains(this_node.description, "slab") ~= nil then
 						if point.y >= hit_pos.y then
 							new_rot = { x = math.rad(180), y = 0, z = 0 }
 						end
@@ -649,9 +731,9 @@ local function perform_raycast()
 					end
 
 					if this_node.paramtype2 == "facedir" then
-						if stringContains(this_node.description, "stair") ~= nil or stringContains(this_node.name, "stair") ~= nil then
+						if Utils.StringContains(this_node.description, "stair") ~= nil or Utils.StringContains(this_node.name, "stair") ~= nil then
 							--THIS TAKES CARE OF CORNER-type STAIRS..
-							if stringContains(this_node.description, "inner") ~= nil or stringContains(this_node.description, "outer") ~= nil then
+							if Utils.StringContains(this_node.description, "inner") ~= nil or Utils.StringContains(this_node.description, "outer") ~= nil then
 								local y = math.rad(0)
 								local elsey = math.rad(270)
 								new_rot = { x = 0, y = 0, z = 0 }
@@ -735,7 +817,7 @@ local function perform_raycast()
 							end
 							goto got_angle
 						end
-						if stringContains(this_node.description, "pumpkin") ~= nil or stringContains(this_node.description, "observer") ~= nil or stringContains(this_node.description, "dispenser") ~= nil or stringContains(this_node.description, "dropper") ~= nil then
+						if Utils.StringContains(this_node.description, "pumpkin") ~= nil or Utils.StringContains(this_node.description, "observer") ~= nil or Utils.StringContains(this_node.description, "dispenser") ~= nil or Utils.StringContains(this_node.description, "dropper") ~= nil then
 							--uses the same logic as wallmounted
 							if p:get_player_control()["sneak"] == true then
 								new_rot = { x = 0, y = 0, z = 0 }
@@ -751,11 +833,11 @@ local function perform_raycast()
 							end
 							goto got_angle
 						end
-						-- if stringContains(this_node.description, "table") ~= nil or stringContains(this_node.description, "chest") ~= nil or stringContains(this_node.description, "barrel") ~= nil or stringContains(this_node.description, "crate") ~= nil or stringContains(this_node.description, "furnace") ~= nil or stringContains(this_node.description, "door") ~= nil or stringContains(this_node.description, "bench") ~= nil then
+						-- if Utils.StringContains(this_node.description, "table") ~= nil or Utils.StringContains(this_node.description, "chest") ~= nil or Utils.StringContains(this_node.description, "barrel") ~= nil or Utils.StringContains(this_node.description, "crate") ~= nil or Utils.StringContains(this_node.description, "furnace") ~= nil or Utils.StringContains(this_node.description, "door") ~= nil or Utils.StringContains(this_node.description, "bench") ~= nil then
 						-- 	--lets not get chests all funky looking
 						-- 	goto got_angle
 						-- end
-						if stringContains(this_node.description, "lantern") ~= nil then
+						if Utils.StringContains(this_node.description, "lantern") ~= nil then
 							new_rot = { x = math.rad(-90), y = 0, z = 0 }
 							goto got_angle
 						end
@@ -830,7 +912,7 @@ local function perform_raycast()
 					end
 
 					if p_data.stairslike_only == true then
-						if stringContains(this_node.name, "stairs") == nil or stringContains(this_node.name, "stairs") == nil then
+						if Utils.StringContains(this_node.name, "stairs") == nil or Utils.StringContains(this_node.name, "stairs") == nil then
 							p_data:removePreview()
 							goto continue
 						end
@@ -885,5 +967,5 @@ end)
 
 
 core.register_on_punchnode(function(pos, node, puncher, pointed_thing)
-	core.log("what is this"..dump(node))
+	core.log("what is this" .. dump(node))
 end)

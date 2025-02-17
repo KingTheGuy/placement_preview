@@ -1,8 +1,9 @@
 # DONE
+- [ ] just rewrite the entire mod.. _i need to get rid of GO-TO_
 - [.] #bug (fixed?) MCL chest kinda break when placed with this mod (maybe just disable the "preview" of them)
 - [ ] change the "calculcations".. their may be some helper functions that can make this better
 - [ ] (what?) take into account the player's hand
-- [ ] in-between stais add support to preview it
+- [ ] in-between stairs, add support to preview it
 - [ ] figure out how to do placement for inner/outer corner stairs
 
 - [ ] setup some type of api for mod devs
