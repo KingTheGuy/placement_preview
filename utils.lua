@@ -33,7 +33,6 @@ function Utils.StringContains(str, find)
 	return i
 end
 
-
 function Utils.Split(str, delimiter)
 	local result = {}
 	for match in (str .. delimiter):gmatch("(.-)" .. delimiter) do
@@ -41,3 +40,11 @@ function Utils.Split(str, delimiter)
 	end
 	return result
 end
+
+function Utils.Distance(x1, y1, z1, x2, y2, z2)
+	local dx = x2 - x1
+	local dy = y2 - y1
+	local dz = z2 - z1
+	return math.sqrt(dx * dx + dy * dy + dz * dz)
+end
+

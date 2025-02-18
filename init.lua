@@ -181,6 +181,7 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 		local vert_slab = false
 
 		if Utils.StringContains(newnode.name, "stair") ~= nil then
+			--FIXME: placing on top/vertically does not work
 			--(ONLY)support for inner and outer stairs
 			if Utils.StringContains(newnode.name, "outer") ~= nil or Utils.StringContains(newnode.name, "inner") ~= nil
 			or
@@ -400,6 +401,7 @@ minetest.register_entity(mod_name .. ":" .. "ghost_object", {
 	use_texture_alpha = true,
 })
 
+--should only be enabled while doing dev work
 if dev_mode then
 	minetest.register_node(mod_name .. ":" .. "dev_node_stairs", {
 		description = "dev stairs[get orientation]",
@@ -477,13 +479,6 @@ if dev_mode then
 			-- minetest.debug(minetest.colorize("cyan", string.format("[%s: %s]", node.name, node.param2)))
 		end,
 	})
-end
-
-function Distance(x1, y1, z1, x2, y2, z2)
-	local dx = x2 - x1
-	local dy = y2 - y1
-	local dz = z2 - z1
-	return math.sqrt(dx * dx + dy * dy + dz * dz)
 end
 
 ---@class vector table
@@ -837,7 +832,7 @@ local function doIt(p)
 
 					if p:get_player_control()["sneak"] == false then
 						--VERTICAL
-						if Distance(point.x, point.y, point.z, under.x, under.y, under.z) < 0.3 then
+						if Utils.Distance(point.x, point.y, point.z, under.x, under.y, under.z) < 0.3 then
 							if param2 == 8 then
 								new_rot = { x = math.rad(90), y = math.rad(180), z = new_rot.z }
 								hit_pos = under
@@ -861,7 +856,7 @@ local function doIt(p)
 
 						if hit_pos.x == under.x then
 							if hit_pos.z == under.z then
-								if Distance(point.x, point.y, point.z, under.x, under.y, under.z) < 0.4 then
+								if Utils.Distance(point.x, point.y, point.z, under.x, under.y, under.z) < 0.4 then
 									if hit_pos.y > under.y then
 										hit_pos = under
 										new_rot = { x = math.rad(180), y = new_rot.y, z = new_rot.z }
