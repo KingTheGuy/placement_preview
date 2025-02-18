@@ -180,7 +180,6 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 		local amount = 90
 		local vert_slab = false
 
-		--TODO: somewhere i then need to place the correct node following the new conrner code
 		if Utils.StringContains(newnode.name, "stair") ~= nil then
 			--(ONLY)support for inner and outer stairs
 			if Utils.StringContains(newnode.name, "outer") ~= nil or Utils.StringContains(newnode.name, "inner") ~= nil
@@ -191,11 +190,18 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 					core.log("we are connecting connected?")
 					local is_connected = core.registered_nodes[p_data.ghost_object:get_properties().wield_item]
 					if Utils.StringContains(is_connected.name, "outer") ~= nil or Utils.StringContains(is_connected.name, "inner") ~= nil then
-						newnode = is_connected
+						core.log("what the fuck does this say? "..newnode.name)
+						local new_node = {
+							name = is_connected.name,
+							param2 = 0,
+						}
+						newnode = new_node
+						core.log("switch to: "..newnode.name)
 					end
 				end
 				-- 	core.log("this should be switched to be an outer/inner node")
-				local rot = p_data.rotation
+				-- local rot = p_data.rotation
+				core.log("the rotation is"..dump(p_data.rotation))
 				-- minetest.debug(string.format("rotation: %s,%s,%s", math.deg(rot.x), math.deg(rot.y), math.deg(rot.z)))
 				-- face = core.dir_to_facedir(placer:get_look_dir(),true)
 				-- goto done
@@ -241,6 +247,7 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 						face = 20
 					end
 				end
+				core.log("face has been set to: "..face)
 				goto done
 			end
 		end
@@ -353,12 +360,10 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 		end
 
 		::done::
-		--FIXME: still have no idea why this is not fully setting correclty
-		-- is it to do with how the node is placing "its-self"
-		-- do "inner/outer" from others reset themselves(??)
-		core.log("new face should be: "..face)
 		newnode.param2 = face
-		core.add_node(pos, newnode)
+		--FIXME: the issue is here "param2 is nil".. why? i do not know
+		core.log("meaning that should also be that face: "..(newnode.param2 or "this is nil")) --this is nil
+		core.set_node(pos, newnode)
 	else
 		return
 	end
