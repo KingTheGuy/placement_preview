@@ -1,6 +1,16 @@
 # TODO:
-- [ ] just rewrite the entire mod.. _i need to get rid of GO-TO_
+- [ ] just rewrite the entire mod... _I need to get rid of GO-TO_
+- [ ] (forcing a snap maybe not the best way) corner should snap...
+    ? may be a bit more complicated
+    - if looking at the side of another stair it should for a corner.(snap)
+    - should take into account if top or bottom
+- [ ] #bug not connecting when there is a node within it
+- [ ] do something with the preview when when the player has not placed anything for a while
+    - maybe hide it if looking at an entity
+    - shrink it?
+    - _its a bit odd to have the preview all the time_
 - [x] in-between stairs, add support to preview it
+- [x] #bug when looking at a slab.. it should not set corner to inner
 
 # NOTS SURE IF THIS APPLIES
 - [.] #bug (fixed?) MCL chest kinda break when placed with this mod (maybe just disable the "preview" of them)
