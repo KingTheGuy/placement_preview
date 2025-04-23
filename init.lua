@@ -2,12 +2,12 @@ dofile(core.get_modpath("placement_preview") .. "/utils.lua")
 local mod_name = "placement_preview"
 
 --to disable some un-needed stuff
-local dev_mode = false;
+local dev_mode = true
 
 -- how much the PP glows
 local glow_amount = 4
 local g_smooth = false            --(not great on servers)smooth preview movement, otherwise snaps. players default to the this setting but can individually set it.
-local g_only_stairs_slabs = false --only wanna preview nodes with special placement
+local g_only_stairs_slabs = true  --only wanna preview nodes with special placement
 
 ---@type number
 local reach_distance = 3.0 --this should actaully just be the player's reach distance
@@ -152,6 +152,7 @@ minetest.register_chatcommand("placement_preview", cmd)
 minetest.register_chatcommand("pp", cmd)
 
 
+---gets the placement to match the preview
 minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack, pointed_thing)
 	local p_data = Player_data.getPlayer(placer:get_player_name())
 	-- core.log("face.."..core.dir_to_facedir(placer:get_look_dir()))
@@ -178,6 +179,7 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 
 	if p_data.node_paramtype2 == "facedir" then
 		-- if Utils.StringContains(newnode.name, "STAIR") ~= nil or Utils.StringContains(newnode.name, "STAIRS") ~= nil then
+		-- core.log("working with y:"..math.deg(p_data.rotation.y).." x:"..math.deg(p_data.rotation.x))
 		local face = 0
 		local amount = 90
 		local vert_slab = false
@@ -190,21 +192,21 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 					p_data.connected == true
 			then
 				if p_data.connected == true then
-					core.log("we are connecting connected?")
+					-- core.log("we are connecting connected?")
 					local is_connected = core.registered_nodes[p_data.ghost_object:get_properties().wield_item]
 					if Utils.StringContains(is_connected.name, "outer") ~= nil or Utils.StringContains(is_connected.name, "inner") ~= nil then
-						core.log("what the fuck does this say? " .. newnode.name)
+						-- core.log("what the fuck does this say? " .. newnode.name)
 						local new_node = {
 							name = is_connected.name,
 							param2 = 0,
 						}
 						newnode = new_node
-						core.log("switch to: " .. newnode.name)
+						-- core.log("switch to: " .. newnode.name)
 					end
 				end
 				-- 	core.log("this should be switched to be an outer/inner node")
 				-- local rot = p_data.rotation
-				core.log("the rotation is" .. dump(p_data.rotation))
+				-- core.log("the rotation is" .. dump(p_data.rotation))
 				-- minetest.debug(string.format("rotation: %s,%s,%s", math.deg(rot.x), math.deg(rot.y), math.deg(rot.z)))
 				-- face = core.dir_to_facedir(placer:get_look_dir(),true)
 				-- goto done
@@ -239,6 +241,8 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 				if math.deg(p_data.rotation.y) == 90 then
 					if math.deg(p_data.rotation.x) == 0 then
 						face = 3
+					elseif math.deg(p_data.rotation.x) == 180 then
+						face = 23
 					else
 						face = 20
 					end
@@ -250,7 +254,12 @@ minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack
 						face = 20
 					end
 				end
-				core.log("face has been set to: " .. face)
+				if math.deg(p_data.rotation.y) == 0 then
+					if math.deg(p_data.rotation.x) == 180 then
+						face = 22
+					end
+				end
+				-- core.log("face has been set to: " .. face)
 				goto done
 			end
 		end
@@ -515,13 +524,13 @@ local function shouldConnect(ghost_pos, this_node, pointed_thing)
 					if Utils.StringContains(second.name, "slab") == nil then
 						is_connected = true
 
-					--FIXME: kinda works.. i should have it only connect when looking at
-					-- the node.. and update a node that could be a coner
-					if is_outer == true then
-						conneted_at = (90*(index-1))%360
+						--FIXME: kinda works.. i should have it only connect when looking at
+						-- the node.. and update a node that could be a coner
+						if is_outer == true then
+							conneted_at = (90 * (index - 1)) % 360
 						else
-						conneted_at = (90*(4-(index-1)))%360
-					end
+							conneted_at = (90 * (4 - (index - 1))) % 360
+						end
 					end
 				end
 			end
@@ -540,21 +549,114 @@ end
 
 ---@class vector table
 ---@param ghost_pos vector
----@return string|nil,number|nil
+---@return string|nil,number|nil,boolean|nil
 -- get the current pos..
 -- if there are stairs around it that it could connect to
 -- connect
 -- just need to check horizontally?
-local function connectTo(ghost_pos, this_node, pointed_thing)
+local function connectTo(p, ghost_pos, this_node, pointed_thing, under, face_pos)
+	-- core.log("face_pos " .. dump(face_pos))
 	local is_connected = false
 	local pointed_at_stairs = false
 	local conneted_at = nil
+	local p_rot = quantize_direction(p:get_look_horizontal())
 	if Utils.StringContains(this_node.name, "inner") ~= nil or Utils.StringContains(this_node.name, "outer") ~= nil then
-		return nil
+		return nil,nil
 	end
 	if Utils.StringContains(pointed_thing.name, "stair") ~= nil then
 		if Utils.StringContains(pointed_thing.name, "slab") == nil then
 			pointed_at_stairs = true
+			-- core.log("yes we are looking a stair")
+			local face = pointed_thing.param2
+			-- core.log("face: " .. pointed_thing.param2)
+			local rotaion = math.deg(p_rot)
+			-- core.log("face: " .. face)
+			-- core.log("p_rot: " .. rotaion)
+			-- core.log("face_pos: " .. dump(face_pos))
+
+			--should only really care about sides and not the top or bottom
+			--NOTE: This is a lot better
+			if face_pos.y == 1 or face_pos.y == -1 then
+				-- core.log("Yea lets not fuck with this")
+				return nil, nil
+			end
+			if face == 0 then
+				if face_pos.x == 1 then
+					return "outer", 0
+				end
+				if face_pos.x == -1 then
+					return "outer", 270
+				end
+				-- if face_pos.x == 0 then
+				-- 	return "outer", 270
+				-- end
+			end
+			if face == 1 then
+				if face_pos.z == 1 then
+					return "outer", 180
+				end
+				if face_pos.z == -1 then
+					return "outer", 270
+				end
+			end
+			if face == 2 then
+				if face_pos.x == 1 then
+					return "outer", 90
+				end
+				if face_pos.x == -1 then
+					return "outer", 180
+				end
+			end
+			if face == 3 then
+				if face_pos.z == 1 then
+					return "outer", 90
+				end
+				if face_pos.z == -1 then
+					return "outer", 0
+				end
+			end
+			--TODO:
+			--when placing a stair, look over to its side and if the bottom stair
+			--is facing towards the ghost node update those nodes to look like they
+			--want to connect
+			--need to also check if those nodes have a stair node on both side or not
+			--if not then we can go ahead and update them
+			--would need to keep a var of that node
+
+			--upside down
+			if face == 17 then
+				if face_pos.z == 1 then
+					return "outer", 90, false
+				end
+				if face_pos.z == -1 then
+					return "outer", 180, false
+				end
+			end
+			if face == 6 then --FIXME: this is not being placed correctly
+				if face_pos.x == 1 then
+					return "outer", 0, false
+				end
+				if face_pos.x == -1 then
+					-- return "outer", 270, false
+					return "outer", 90, false
+				end
+			end
+			if face == 8 then
+				if face_pos.x == 1 then
+					return "outer", 270, false
+				end
+				if face_pos.x == -1 then
+					return "outer", 180, false
+				end
+			end
+			if face == 15 then
+				if face_pos.z == 1 then
+					return "outer", 0, false
+				end
+				if face_pos.z == -1 then
+					return "outer", 270, false
+				end
+			end
 		end
 	end
 	-- local to_check = {
@@ -572,25 +674,33 @@ local function connectTo(ghost_pos, this_node, pointed_thing)
 	-- 				if Utils.StringContains(second.name, "slab") == nil then
 	-- 					is_connected = true
 
-	-- 				--FIXME: kinda works.. i should have it only connect when looking at
-	-- 				-- the node.. and update a node that could be a coner
-	-- 				if pointed_at_stairs == true then
-	-- 					conneted_at = (90*(index-1))%360
+	-- 					--FIXME: kinda works.. i should have it only connect when looking at
+	-- 					-- the node.. and update a node that could be a coner
+	-- 					if pointed_at_stairs == true then
+	-- 						conneted_at = (90 * (index - 1)) % 360
 	-- 					else
-	-- 					conneted_at = (90*(4-(index-1)))%360
-	-- 				end
+	-- 						core.log("looks odd")
+	-- 						local rot = (90 * (4 - (index - 1))) % 360
+	-- 						if rot == 180 then
+	-- 							rot = 0
+	-- 						elseif rot == 0 then
+	-- 							rot = 180
+	-- 						end
+	-- 						conneted_at = rot
+	-- 						core.log(conneted_at)
+	-- 					end
 	-- 				end
 	-- 			end
 	-- 		end
 	-- 	end
 	-- end
-	if is_connected == true then
-		if pointed_at_stairs == true then
-			return "outer", conneted_at
-		else
-			return "inner", conneted_at
-		end
-	end
+	-- if is_connected == true then
+	-- if pointed_at_stairs == true then
+	-- 	return "outer", conneted_at
+	-- else
+	-- return "inner", conneted_at
+	-- end
+	-- end
 	return nil, nil
 end
 
@@ -843,10 +953,12 @@ local function doIt(p)
 		local hit_pos = raycast_result.above
 		local under = raycast_result.under
 		local point = raycast_result.intersection_point
+
+		local face_pos = vector.subtract(hit_pos, under)
 		-- local pointed_node = minetest.registered_nodes[minetest.get_node(under).name]
 		local pointed_node = minetest.get_node(under)
 		-- local pointed_face = raycast_result.intersection_normal
-		local is_connected, snap = nil, nil
+		local is_connected, snap, upside = nil, nil, nil
 		if hit_pos ~= nil then
 			if p_data.ghost_object == nil then
 				p_data.ghost_object = minetest.add_entity(hit_pos, mod_name .. ":" .. "ghost_object")
@@ -855,7 +967,8 @@ local function doIt(p)
 
 			--lets just place the stair normally without connecting
 			if p:get_player_control()["sneak"] == false then
-				is_connected, snap = shouldConnect(hit_pos, this_node, pointed_node)
+				-- is_connected, snap = shouldConnect(hit_pos, this_node, pointed_node)
+				is_connected, snap, upside = connectTo(p, hit_pos, this_node, pointed_node, under, face_pos)
 			end
 			if is_connected ~= nil then
 				local this_is_already_corner = false
@@ -959,8 +1072,15 @@ local function doIt(p)
 				if snap ~= nil then
 					-- new_rot = { x = snap[1].x + snap[2].x, y = math.rad(0),z = snap[1].z + snap[2].z }
 					-- new_rot = { x = math.rad(snap[1].x + snap[2].x), y = 0,z = 0}
-					new_rot = { x = 0, y = math.rad(snap), z = 0}
-					core.log(snap)
+					-- new_rot = { x = 0, y = math.rad(snap), z = 0 }
+					-- new_rot = { x = 0, y = math.rad(snap), z = 0 }
+					if upside == false then
+						-- core.log("THIS SHOULD BE UPSIDE DOWN")
+						new_rot = { x = math.rad(180), y = math.rad(snap), z = new_rot.z }
+					else
+						-- core.log("THIS SHOULD BE NORMAL")
+						new_rot = { x = new_rot.x, y = math.rad(snap), z = new_rot.z }
+					end
 				end
 			end
 			::override::
@@ -1038,6 +1158,6 @@ minetest.register_on_leaveplayer(function(ObjectRef, timed_out)
 end)
 
 
-core.register_on_punchnode(function(pos, node, puncher, pointed_thing)
-	core.log("what is this" .. dump(node))
-end)
+-- core.register_on_punchnode(function(pos, node, puncher, pointed_thing)
+-- 	core.log("what is this" .. dump(node))
+-- end)
