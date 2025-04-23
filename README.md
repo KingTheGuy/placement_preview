@@ -13,9 +13,9 @@ settings include:
 
 Originally this mod was intended to only preview stairs/slab placement
 
-_1.0.6 CHANGELOG:_
+_1.1.0 CHANGELOG:_
   * added support for _inner_ stairs placement & preview (place a normal stairs while looking at the side of a stair)
-  * preview distance should now match the gamemode's reach disatnce (VOXELIBRE) 
+  * preview distance should now match the gamemode's reach distance (VOXELIBRE) 
 
 _1.0.5 CHANGELOG:_
 
