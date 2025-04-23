@@ -1,6 +1,7 @@
 {
     "diagnostics.globals": [
         "minetest",
-        "core"
+        "core",
+        "dump"
     ]
 }

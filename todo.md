@@ -1,4 +1,5 @@
 # TODO:
+- (this may be of use) core.rotate_and_place(itemstack, placer, pointed_thing[, infinitestacks, orient_flags, prevent_after_place])
 - [ ] just rewrite the entire mod... _I need to get rid of GO-TO_
 - [ ] (forcing a snap maybe not the best way) corner should snap...
     ? may be a bit more complicated
@@ -16,7 +17,8 @@
 - [.] #bug (fixed?) MCL chest kinda break when placed with this mod (maybe just disable the "preview" of them)
 - [ ] change the "calculcations".. their may be some helper functions that can make this better
 - [ ] (what?) take into account the player's hand
-- [ ] figure out how to do placement for inner/outer corner stairs
+- [.] figure out how to do placement for inner/outer corner stairs
+    - [x] inner stairs
 
 - [ ] setup some type of api for mod devs
 - [ ] add ingame cmd for players to edit what orientation behavior a node should have()
