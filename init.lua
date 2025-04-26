@@ -154,6 +154,11 @@ minetest.register_chatcommand("pp", cmd)
 
 ---gets the placement to match the preview
 minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack, pointed_thing)
+	--Guard against nil placer
+	if not placer then
+		return
+	end
+
 	local p_data = Player_data.getPlayer(placer:get_player_name())
 	-- core.log("face.."..core.dir_to_facedir(placer:get_look_dir()))
 	p_data.grow = true
