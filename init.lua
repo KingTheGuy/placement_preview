@@ -958,7 +958,7 @@ local function doIt(p)
 		-- local pointed_node = minetest.registered_nodes[minetest.get_node(under).name]
 		local pointed_node = minetest.get_node(under)
 		-- local pointed_face = raycast_result.intersection_normal
-		local is_connected, snap, upside = nil, nil, nil
+		local corner_type, snap, upside = nil, nil, nil
 		if hit_pos ~= nil then
 			if p_data.ghost_object == nil then
 				p_data.ghost_object = minetest.add_entity(hit_pos, mod_name .. ":" .. "ghost_object")
@@ -968,35 +968,37 @@ local function doIt(p)
 			--lets just place the stair normally without connecting
 			if p:get_player_control()["sneak"] == false then
 				-- is_connected, snap = shouldConnect(hit_pos, this_node, pointed_node)
-				is_connected, snap, upside = connectTo(p, hit_pos, this_node, pointed_node, under, face_pos)
+				corner_type, snap, upside = connectTo(p, hit_pos, this_node, pointed_node, under, face_pos)
 			end
-			if is_connected ~= nil then
-				local this_is_already_corner = false
-				if Utils.StringContains(this_node.name, is_connected) ~= nil then
-					this_is_already_corner = true
+			if corner_type ~= nil then
+				local is_corner = false --check if the node is already a corner node
+				if Utils.StringContains(this_node.name, corner_type) ~= nil then
+					is_corner = true
 				end
-				if Utils.StringContains(this_node.name, is_connected) ~= nil then
-					this_is_already_corner = true
-				end
-				if this_is_already_corner == false then
+				if is_corner == false then
 					-- core.log("yes this is not connecting")
-					local s_node = minetest.registered_nodes[item_name .. "_" .. is_connected]
+					local s_node = minetest.registered_nodes[item_name .. "_" .. corner_type]
 					if s_node == nil then
 						local split_word = Utils.Split(item_name, "_")
-						local combined_word = split_word[1] .. "_" .. is_connected .. "_" .. split_word[2]
+						local combined_word = split_word[1] .. "_" .. corner_type .. "_" .. split_word[2]
 						-- core.log("what do we have..", combined_word)
 						s_node = minetest.registered_nodes[combined_word]
 						if s_node ~= nil then
 							item_name = combined_word
+						else 
+							core.log("yes this should be normal")
+							p_data.connected = false
+							-- corner_type = nil
+							-- snap = nil
 						end
 					else
-						item_name = item_name .. "_" .. is_connected
+						item_name = item_name .. "_" .. corner_type
 					end
 					if s_node ~= nil then
 						this_node = s_node
 					end
 				end
-				p_data.connected = true
+				p_data.connected = true --FIXME: this is the issue
 			else
 				p_data.connected = false
 			end
@@ -1157,7 +1159,8 @@ minetest.register_on_leaveplayer(function(ObjectRef, timed_out)
 	end
 end)
 
-
--- core.register_on_punchnode(function(pos, node, puncher, pointed_thing)
--- 	core.log("what is this" .. dump(node))
--- end)
+if dev_mode == true then
+	core.register_on_punchnode(function(pos, node, puncher, pointed_thing)
+		core.log("what is this" .. dump(node))
+	end)
+end

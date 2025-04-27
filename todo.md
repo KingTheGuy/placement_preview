@@ -1,4 +1,7 @@
 # TODO:
+- [ ] connected stairs, do not override if inner/outer variant does not exist
+- [x] (turns out there are no inner/outer variant for this) add support for more outer stair preview (example: pine wood does not work)
+- [ ] when a player starts to dig or punch remove the preview for a sec
 - (this may be of use) core.rotate_and_place(itemstack, placer, pointed_thing[, infinitestacks, orient_flags, prevent_after_place])
 - [ ] just rewrite the entire mod... _I need to get rid of GO-TO_
 - [ ] (forcing a snap maybe not the best way) corner should snap...
