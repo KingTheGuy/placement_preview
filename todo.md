@@ -1,4 +1,5 @@
 # TODO:
+- [ ] add toggle for pulse animation
 - [ ] connected stairs, do not override if inner/outer variant does not exist
 - [x] (turns out there are no inner/outer variant for this) add support for more outer stair preview (example: pine wood does not work)
 - [ ] when a player starts to dig or punch remove the preview for a sec
