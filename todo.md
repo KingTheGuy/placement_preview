@@ -1,4 +1,9 @@
-# TODO:
+## BUGS:
+
+- [ ] placing slabs is a bit funky mainly when holding shift (alternative placement)
+
+## TODO:
+
 - [ ] add toggle for pulse animation
 - [ ] connected stairs, do not override if inner/outer variant does not exist
 - [x] (turns out there are no inner/outer variant for this) add support for more outer stair preview (example: pine wood does not work)
@@ -17,7 +22,8 @@
 - [x] in-between stairs, add support to preview it
 - [x] #bug when looking at a slab.. it should not set corner to inner
 
-# NOTS SURE IF THIS APPLIES
+## NOTS SURE IF THIS APPLIES
+
 - [.] #bug (fixed?) MCL chest kinda break when placed with this mod (maybe just disable the "preview" of them)
 - [ ] change the "calculcations".. their may be some helper functions that can make this better
 - [ ] (what?) take into account the player's hand
