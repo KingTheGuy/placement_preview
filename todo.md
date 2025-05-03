@@ -4,9 +4,6 @@
 
 ## TODO:
 
-- [ ] add toggle for pulse animation
-- [ ] connected stairs, do not override if inner/outer variant does not exist
-- [x] (turns out there are no inner/outer variant for this) add support for more outer stair preview (example: pine wood does not work)
 - [ ] when a player starts to dig or punch remove the preview for a sec
 - (this may be of use) core.rotate_and_place(itemstack, placer, pointed_thing[, infinitestacks, orient_flags, prevent_after_place])
 - [ ] just rewrite the entire mod... _I need to get rid of GO-TO_
@@ -25,7 +22,7 @@
 ## NOTS SURE IF THIS APPLIES
 
 - [.] #bug (fixed?) MCL chest kinda break when placed with this mod (maybe just disable the "preview" of them)
-- [ ] change the "calculcations".. their may be some helper functions that can make this better
+- [ ] change the "calculations"... their may be some helper functions that can make this better
 - [ ] (what?) take into account the player's hand
 - [.] figure out how to do placement for inner/outer corner stairs
     - [x] inner stairs
@@ -92,3 +89,10 @@
 
 - [ ] IDEA option "sneak to preview"
 - [ ] distance should be up to the player's reach
+
+## DONE:
+
+- [x] corner stair placed/previewed when looking at the side of a corner stair
+- [x] connected stairs, prevent override if variant does not exist
+- [x] add toggle for pulse animation
+- [x] (turns out there are no inner/outer variant for this) add support for more outer stair preview (example: pine wood does not work)

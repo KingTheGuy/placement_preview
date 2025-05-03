@@ -6,8 +6,9 @@ local dev_mode = true
 
 -- how much the PP glows
 local glow_amount = 4
-local g_smooth = false            --(not great on servers)smooth preview movement, otherwise snaps. players default to the this setting but can individually set it.
-local g_only_stairs_slabs = true  --only wanna preview nodes with special placement
+local g_smooth = false           --(not great on servers)smooth preview movement, otherwise snaps. players default to the this setting but can individually set it.
+local g_pulse = false
+local g_only_stairs_slabs = true --only wanna preview nodes with special placement
 
 ---@type number
 local reach_distance = 3.0 --this should actaully just be the player's reach distance
@@ -18,6 +19,10 @@ Player_data = {}
 local function ghost_objectAnimation()
 	for _, p in ipairs(Player_data) do
 		if p.ghost_object ~= nil then
+			if g_pulse == false then
+				local size = { x = 0.1, y = 0.1, z = 0.1 }
+				return
+			end
 			if p.grow == true then
 				local size = { x = 0.1, y = 0.1, z = 0.1 }
 				p.ghost_object:set_properties({ visual_size = size })
@@ -91,6 +96,10 @@ local cmd = {
 	func = function(name, param)
 		local player = Player_data.getPlayer(name)
 		local fields = Utils.Split(param, " ")
+		local error_msg = function()
+			minetest.chat_send_player(name,
+				minetest.colorize("red", "You may be brain dead.. example: \n\t /placement_preview help \n\t or \n\t /pp help"))
+		end
 		if #fields == 1 then
 			if param == "on" or param == "true" or param == "enable" then
 				player.disabled = false
@@ -105,13 +114,12 @@ local cmd = {
 							"list of commands: \n",
 							"\t [true|false] \n",
 							"\t smooth [true|false] \n",
+							"\t pulse_animation [true|false] \n",
 							"\t only_stairs_slabs [true|false] \n",
 						})
-
 					))
 			else
-				minetest.chat_send_player(name,
-					minetest.colorize("red", "You may be brain dead.. example: \n\t /placement_preview help \n\t or \n\t /pp help"))
+				error_msg()
 			end
 		end
 		if #fields > 1 then
@@ -123,27 +131,39 @@ local cmd = {
 				elseif value == "false" then
 					player.smooth = false
 				else
-					minetest.chat_send_player(name,
-						minetest.colorize("red", "You may be brain dead.. example: \t /placement_preview help"))
+					error_msg()
 					return
 				end
 				minetest.chat_send_player(name, minetest.colorize("cyan", string.format("pp smooth is now: " .. value)))
-			elseif option == "only_stairs_slabs" then
+				return
+			end
+			if option == "only_stairs_slabs" then
 				if value == "true" then
 					player.only_stairs_slabs = true
 				elseif value == "false" then
 					player.only_stairs_slabs = false
 				else
-					minetest.chat_send_player(name,
-						minetest.colorize("red", "You may be brain dead.. example: \t /placement_preview help"))
+					error_msg()
 					return
 				end
 				minetest.chat_send_player(name,
-					minetest.colorize("cyan", string.format("pp only_stairs_slabs os now: " .. value)))
-			else
-				minetest.chat_send_player(name,
-					minetest.colorize("red", "You may be brain dead.. example: \t /placement_preview help"))
+					minetest.colorize("cyan", string.format("pp only_stairs_slabs is now: " .. value)))
+				return
 			end
+			if option == "pulse_animation" then
+				if value == "true" then
+					g_pulse = true
+				elseif value == "false" then
+					g_pulse = false
+				else
+					error_msg()
+					return
+				end
+				minetest.chat_send_player(name,
+					minetest.colorize("cyan", string.format("pp pulse_animation is now: " .. value)))
+				return
+			end
+			error_msg()
 		end
 	end,
 }
@@ -566,6 +586,10 @@ local function connectTo(p, ghost_pos, this_node, pointed_thing, under, face_pos
 	local conneted_at = nil
 	local p_rot = quantize_direction(p:get_look_horizontal())
 	if Utils.StringContains(this_node.name, "inner") ~= nil or Utils.StringContains(this_node.name, "outer") ~= nil then
+		return nil, nil
+	end
+	--prevent preview if potined_thing is a corner varient
+	if Utils.StringContains(pointed_thing.name, "inner") or Utils.StringContains(pointed_thing.name, "outer") then
 		return nil,nil
 	end
 	if Utils.StringContains(pointed_thing.name, "stair") ~= nil then
@@ -975,35 +999,34 @@ local function doIt(p)
 				-- is_connected, snap = shouldConnect(hit_pos, this_node, pointed_node)
 				corner_type, snap, upside = connectTo(p, hit_pos, this_node, pointed_node, under, face_pos)
 			end
+
 			if corner_type ~= nil then
-				local is_corner = false --check if the node is already a corner node
 				if Utils.StringContains(this_node.name, corner_type) ~= nil then
-					is_corner = true
+					return
 				end
-				if is_corner == false then
-					-- core.log("yes this is not connecting")
-					local s_node = minetest.registered_nodes[item_name .. "_" .. corner_type]
-					if s_node == nil then
-						local split_word = Utils.Split(item_name, "_")
-						local combined_word = split_word[1] .. "_" .. corner_type .. "_" .. split_word[2]
-						-- core.log("what do we have..", combined_word)
-						s_node = minetest.registered_nodes[combined_word]
-						if s_node ~= nil then
-							item_name = combined_word
-						else 
-							core.log("yes this should be normal")
-							p_data.connected = false
-							-- corner_type = nil
-							-- snap = nil
-						end
+
+				local found_varient = false
+				local varient_node = minetest.registered_nodes[item_name .. "_" .. corner_type]
+
+				if varient_node == nil then
+					local split_word = Utils.Split(item_name, "_")
+					local combined_word = split_word[1] .. "_" .. corner_type .. "_" .. split_word[2]
+					varient_node = minetest.registered_nodes[combined_word]
+					if varient_node ~= nil then
+						item_name = combined_word
+						found_varient = true
 					else
-						item_name = item_name .. "_" .. corner_type
+						found_varient = false
 					end
-					if s_node ~= nil then
-						this_node = s_node
-					end
+				else
+					item_name = item_name .. "_" .. corner_type
 				end
-				p_data.connected = true --FIXME: this is the issue
+				if varient_node ~= nil then
+					this_node = varient_node
+				end
+				if found_varient == true then
+					p_data.connected = true
+				end
 			else
 				p_data.connected = false
 			end

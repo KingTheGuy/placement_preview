@@ -14,10 +14,18 @@ settings include:
 Originally this mod was intended to only preview stairs/slab placement
 
 _1.1.1 CHANGELOG:_
+
+  * added toggle for pulse animation
+    - 'placement_preview pulse_animation true|false'
+
   bugfix:
+
+  * prevent stair variant when looking a corner variant
   * crash from non player placers
+  * prevent overriding stair when variant does not exist
 
 _1.1.0 CHANGELOG:_
+
   * added support for _outer_ stairs placement & preview (place a normal stairs while looking at the side of a stair)
   * preview distance should now match the gamemode's reach distance (VOXELIBRE) 
 
