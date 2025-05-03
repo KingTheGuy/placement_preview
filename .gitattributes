@@ -1,0 +1,5 @@
+.*      export-ignore
+repo-assets export-ignore
+brain.lorien export-ignore
+todo.md export-ignore
+*.zip       export-ignore
