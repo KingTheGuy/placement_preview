@@ -2,7 +2,7 @@ dofile(core.get_modpath("placement_preview") .. "/utils.lua")
 local mod_name = "placement_preview"
 
 --to disable some un-needed stuff
-local dev_mode = true
+local dev_mode = false
 
 -- how much the PP glows
 local glow_amount = 4
