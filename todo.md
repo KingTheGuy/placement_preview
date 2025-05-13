@@ -1,8 +1,17 @@
 ## BUGS:
 
 - [ ] placing slabs is a bit funky mainly when holding shift (alternative placement)
+- [x] corner preview not working for all stair nodes
 
 ## TODO:
+
+- [ ] _turn off DEV mode before creating release_
+
+- [ ] more aggressive angle from player for corner variant placement
+- [ ] allow crouch placement of inner/outer stair like how normal stairs/slabs can be placed sideways
+- [x] toggle for auto corners
+
+## BACKLOG:
 
 - [ ] when a player starts to dig or punch remove the preview for a sec
 - (this may be of use) core.rotate_and_place(itemstack, placer, pointed_thing[, infinitestacks, orient_flags, prevent_after_place])

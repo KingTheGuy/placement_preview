@@ -2,13 +2,14 @@ dofile(core.get_modpath("placement_preview") .. "/utils.lua")
 local mod_name = "placement_preview"
 
 --to disable some un-needed stuff
-local dev_mode = false
+local dev_mode = true
 
 -- how much the PP glows
 local glow_amount = 4
 local g_smooth = false           --(not great on servers)smooth preview movement, otherwise snaps. players default to the this setting but can individually set it.
 local g_pulse = false
 local g_only_stairs_slabs = true --only wanna preview nodes with special placement
+local g_auto_corners = false
 
 ---@type number
 local reach_distance = 3.0 --this should actaully just be the player's reach distance
@@ -161,6 +162,19 @@ local cmd = {
 				end
 				minetest.chat_send_player(name,
 					minetest.colorize("cyan", string.format("pp pulse_animation is now: " .. value)))
+				return
+			end
+			if option == "auto_corners" then
+				if value == "true" then
+					g_auto_corners = true
+				elseif value == "false" then
+					g_auto_corners = false
+				else
+					error_msg()
+					return
+				end
+				minetest.chat_send_player(name,
+					minetest.colorize("cyan", string.format("pp auto_corners is now: " .. value)))
 				return
 			end
 			error_msg()
@@ -833,6 +847,7 @@ local function gotAngle(p, new_rot, point, hit_pos, under, this_node)
 			end
 			return new_rot
 		end
+
 		if Utils.StringContains(this_node.description, "pumpkin") ~= nil or Utils.StringContains(this_node.description, "observer") ~= nil or Utils.StringContains(this_node.description, "dispenser") ~= nil or Utils.StringContains(this_node.description, "dropper") ~= nil then
 			--uses the same logic as wallmounted
 			if p:get_player_control()["sneak"] == true then
@@ -997,7 +1012,9 @@ local function doIt(p)
 			--lets just place the stair normally without connecting
 			if p:get_player_control()["sneak"] == false then
 				-- is_connected, snap = shouldConnect(hit_pos, this_node, pointed_node)
-				corner_type, snap, upside = connectTo(p, hit_pos, this_node, pointed_node, under, face_pos)
+				if g_auto_corners == true then
+					corner_type, snap, upside = connectTo(p, hit_pos, this_node, pointed_node, under, face_pos)
+				end
 			end
 
 			if corner_type ~= nil then
@@ -1010,7 +1027,16 @@ local function doIt(p)
 
 				if varient_node == nil then
 					local split_word = Utils.Split(item_name, "_")
-					local combined_word = split_word[1] .. "_" .. corner_type .. "_" .. split_word[2]
+					-- local combined_word = split_word[1] .. "_" .. corner_type .. "_" .. split_word[2]
+					local combined_word = split_word[1]
+					for index, value in ipairs(split_word) do
+						if index ~= 1 then
+							combined_word = combined_word .. "_" .. value
+						else
+							combined_word = combined_word .. "_" .. corner_type
+						end
+					end
+					core.log(combined_word)
 					varient_node = minetest.registered_nodes[combined_word]
 					if varient_node ~= nil then
 						item_name = combined_word
