@@ -1,9 +1,9 @@
 ## BUGS:
 
+- [ ] looking at an unknown crashes game
 - [ ] placing slabs is a bit funky mainly when holding shift (alternative placement)
 
 ## TODO:
-
 - [ ] when a player starts to dig or punch remove the preview for a sec
 - (this may be of use) core.rotate_and_place(itemstack, placer, pointed_thing[, infinitestacks, orient_flags, prevent_after_place])
 - [ ] just rewrite the entire mod... _I need to get rid of GO-TO_
@@ -11,7 +11,7 @@
     ? may be a bit more complicated
     - if looking at the side of another stair it should for a corner.(snap)
     - should take into account if top or bottom
-- [ ] #bug not connecting when there is a node within it
+- [ ] #bug (what is bro talking about???) not connecting when there is a node within it
 - [ ] do something with the preview when when the player has not placed anything for a while
     - maybe hide it if looking at an entity
     - shrink it?
@@ -21,7 +21,7 @@
 
 ## NOTS SURE IF THIS APPLIES
 
-- [.] #bug (fixed?) MCL chest kinda break when placed with this mod (maybe just disable the "preview" of them)
+- [x] #bug (fixed?) MCL chest kinda break when placed with this mod (maybe just disable the "preview" of them)
 - [ ] change the "calculations"... their may be some helper functions that can make this better
 - [ ] (what?) take into account the player's hand
 - [.] figure out how to do placement for inner/outer corner stairs

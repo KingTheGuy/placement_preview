@@ -88,6 +88,45 @@ function Player_data.getPlayer(name)
 	return Player_data.addPlayer(name)
 end
 
+local function findVarientNode(item_name,corner_type)
+	local split = Utils.Split(item_name,":")
+
+	-- core.log("prefix: "..split[1])
+	local clean_up = string.gsub(split[2], "stair_", "")
+	-- core.log("node: "..split[2])
+	-- core.log("after_cleanup: "..clean_up)
+	local to_search = split[1]..":".."stair_" .. corner_type .. "_" .. clean_up
+	local alt_search = split[1]..":".."stair_" .. clean_up .. "_" .. corner_type
+	local alt_search2 = split[1]..":"..corner_type .. "_stair_" .. clean_up
+
+	local corner = { to_search, alt_search, alt_search2 }
+
+	for _, value in ipairs(corner) do
+		local varient_node = minetest.registered_nodes[value]
+		if varient_node ~= nil then
+			-- core.log("found varient: "..value)
+			return value
+		end
+	end
+	return nil
+end
+
+local function is_player_facing_node_face(player,raycast)
+    local player_pos = player:get_pos()
+    local look_dir = player:get_look_dir()
+
+    local player_norm = vector.subtract(player_pos,vector.round(look_dir))
+    local player_face_pos = vector.subtract(player_pos,player_norm)
+    core.log("player: "..core.colorize("#045689",dump(player_face_pos)))
+    local face_pos = vector.subtract(raycast.under, raycast.above)
+    core.log("node: "..dump(face_pos))
+    -- if vector.equals(player_face_pos,face_pos) then
+    if player_face_pos.x == face_pos.x and player_face_pos.z == face_pos.z then
+    	return true
+    end
+    return false
+end
+
 local cmd = {
 	params = "help",
 	-- params = "[on|off] or [enable|disable] or [true|false]",
@@ -579,7 +618,7 @@ end
 -- if there are stairs around it that it could connect to
 -- connect
 -- just need to check horizontally?
-local function connectTo(p, ghost_pos, this_node, pointed_thing, under, face_pos)
+local function connectTo(p, ghost_pos, this_node, pointed_thing, under, face_pos,raycast_result)
 	-- core.log("face_pos " .. dump(face_pos))
 	local is_connected = false
 	local pointed_at_stairs = false
@@ -590,7 +629,7 @@ local function connectTo(p, ghost_pos, this_node, pointed_thing, under, face_pos
 	end
 	--prevent preview if potined_thing is a corner varient
 	if Utils.StringContains(pointed_thing.name, "inner") or Utils.StringContains(pointed_thing.name, "outer") then
-		return nil,nil
+		return nil, nil
 	end
 	if Utils.StringContains(pointed_thing.name, "stair") ~= nil then
 		if Utils.StringContains(pointed_thing.name, "slab") == nil then
@@ -605,6 +644,9 @@ local function connectTo(p, ghost_pos, this_node, pointed_thing, under, face_pos
 
 			--should only really care about sides and not the top or bottom
 			--NOTE: This is a lot better
+			if is_player_facing_node_face(p,raycast_result) == false then
+				return nil,nil
+			end
 			if face_pos.y == 1 or face_pos.y == -1 then
 				-- core.log("Yea lets not fuck with this")
 				return nil, nil
@@ -997,7 +1039,7 @@ local function doIt(p)
 			--lets just place the stair normally without connecting
 			if p:get_player_control()["sneak"] == false then
 				-- is_connected, snap = shouldConnect(hit_pos, this_node, pointed_node)
-				corner_type, snap, upside = connectTo(p, hit_pos, this_node, pointed_node, under, face_pos)
+				corner_type, snap, upside = connectTo(p, hit_pos, this_node, pointed_node, under, face_pos,raycast_result)
 			end
 
 			if corner_type ~= nil then
@@ -1005,26 +1047,47 @@ local function doIt(p)
 					return
 				end
 
+				--TODO: remove "stair" from the name
+				--find exact but with corner_type
+				--
+				-- node_name -> corner_varient
+				-- node_name: stair_obsidian_block
+				-- corner_name: stair_corner_obsidian_block
 				local found_varient = false
-				local varient_node = minetest.registered_nodes[item_name .. "_" .. corner_type]
 
-				if varient_node == nil then
-					local split_word = Utils.Split(item_name, "_")
-					local combined_word = split_word[1] .. "_" .. corner_type .. "_" .. split_word[2]
-					varient_node = minetest.registered_nodes[combined_word]
-					if varient_node ~= nil then
-						item_name = combined_word
-						found_varient = true
-					else
-						found_varient = false
-					end
-				else
-					item_name = item_name .. "_" .. corner_type
-				end
-				if varient_node ~= nil then
-					this_node = varient_node
-				end
-				if found_varient == true then
+				local varient_node_name = findVarientNode(item_name,corner_type)
+
+				-- local varient_node = minetest.registered_nodes[item_name .. "_" .. corner_type]
+				-- local varient_node = minetest.registered_nodes[to_search]
+
+				-- if varient_node_name == nil then
+				-- 	-- local split_word = Utils.Split(item_name, "_")
+				-- 	-- local combined_word = split_word[1] .. "_" .. corner_type .. "_" .. split_word[2]
+				-- 	-- varient_node = minetest.registered_nodes[combined_word]
+				-- 	-- if varient_node ~= nil then
+				-- 	-- 	item_name = combined_word
+				-- 	-- 	found_varient = true
+				-- 	-- else
+				-- 	-- 	found_varient = false
+				-- 	-- end
+				-- 	varient_node_name = minetest.registered_nodes[alt_search2]
+				-- 	if varient_node_name ~= nil then
+				-- 		found_varient = true
+				-- 		item_name = alt_search2
+				-- 	else
+				-- 		found_varient = false
+				-- 	end
+				-- else
+				-- 	-- item_name = item_name .. "_" .. corner_type
+				-- 	item_name = to_search
+				-- end
+				-- if varient_node_name ~= nil then
+				-- 	this_node = varient_node_name
+				-- end
+
+				if varient_node_name ~= nil then
+					item_name = varient_node_name
+					this_node = core.registered_nodes[varient_node_name]
 					p_data.connected = true
 				end
 			else
