@@ -117,9 +117,9 @@ local function is_player_facing_node_face(player,raycast)
 
     local player_norm = vector.subtract(player_pos,vector.round(look_dir))
     local player_face_pos = vector.subtract(player_pos,player_norm)
-    core.log("player: "..core.colorize("#045689",dump(player_face_pos)))
+    -- core.log("player: "..core.colorize("#045689",dump(player_face_pos)))
     local face_pos = vector.subtract(raycast.under, raycast.above)
-    core.log("node: "..dump(face_pos))
+    -- core.log("node: "..dump(face_pos))
     -- if vector.equals(player_face_pos,face_pos) then
     if player_face_pos.x == face_pos.x and player_face_pos.z == face_pos.z then
     	return true
